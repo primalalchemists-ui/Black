@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { mailTransport, getMailFrom } from "@/lib/mail";
+import { getMailTransport, getMailFrom, getOwnerTo } from "@/lib/mail";
 import { inquiryClientText, inquiryOwnerText } from "@/lib/mailTemplates";
 import { occasionalInquirySchema } from "@/lib/validation/occasionalInquiry";
 
@@ -19,7 +19,21 @@ export async function POST(req: Request) {
 
     // opcjonalnie: zapis do Payload / bazy
 
-    const ownerTo = process.env.MAIL_TO_OWNER!;
+    // ✅ runtime init (nie zabija builda)
+    let mailTransport;
+    try {
+      mailTransport = getMailTransport();
+    } catch (e: any) {
+      if (e?.message === "MAIL_NOT_CONFIGURED") {
+        return NextResponse.json(
+          { error: "MAIL_NOT_CONFIGURED" },
+          { status: 503 }
+        );
+      }
+      throw e;
+    }
+
+    const ownerTo = getOwnerTo();
     const from = getMailFrom();
 
     await mailTransport.sendMail({

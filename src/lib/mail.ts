@@ -1,28 +1,44 @@
 import nodemailer from "nodemailer";
 
-function required(name: string) {
+function getEnv(name: string) {
   const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
+  return v && v.length ? v : null;
+}
+
+function requireAtRuntime(name: string) {
+  const v = getEnv(name);
+  if (!v) throw new Error(`MAIL_NOT_CONFIGURED:${name}`);
   return v;
 }
 
-const host = required("MAIL_HOST");
-const port = Number(required("MAIL_PORT"));
-const secure = String(required("MAIL_SECURE")) === "true";
-const user = required("MAIL_USER");
-const pass = required("MAIL_PASS");
+export function getMailTransport() {
+  const host = getEnv("MAIL_HOST");
+  const portRaw = getEnv("MAIL_PORT");
+  const secureRaw = getEnv("MAIL_SECURE");
+  const user = getEnv("MAIL_USER");
+  const pass = getEnv("MAIL_PASS");
 
-export const mailTransport = nodemailer.createTransport({
-  host,
-  port,
-  secure,
-  auth: { user, pass },
-});
+  if (!host || !portRaw || !secureRaw || !user || !pass) {
+    // Nie zabijaj builda — zgłoś, że mail nie jest skonfigurowany
+    throw new Error("MAIL_NOT_CONFIGURED");
+  }
+
+  const port = Number(portRaw);
+  const secure = String(secureRaw).toLowerCase() === "true";
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+}
 
 export function getMailFrom() {
-  return required("MAIL_FROM");
+  // MAIL_FROM może być wymagane dopiero gdy faktycznie wysyłasz mail
+  return requireAtRuntime("MAIL_FROM");
 }
 
 export function getOwnerTo() {
-  return required("MAIL_TO_OWNER");
+  return requireAtRuntime("MAIL_TO_OWNER");
 }
