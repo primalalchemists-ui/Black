@@ -1,7 +1,7 @@
 import HomePageClient from "@/components/home/HomePageClient"
 
 async function getSiteSettings() {
-  const baseUrl = process.env.PAYLOAD_URL
+  const baseUrl = process.env.PAYLOAD_PUBLIC_SERVER_URL
   if (!baseUrl) return {}
 
   const res = await fetch(`${baseUrl}/api/globals/site-settings`, {
