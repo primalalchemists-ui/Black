@@ -1,0 +1,40 @@
+
+> centrum-spotkan-black@1.0.0 build C:\Users\48728\Desktop\black\centrum-spotkan-black
+> cross-env NODE_OPTIONS="--no-deprecation --max-old-space-size=8000" next build
+
+   ▲ Next.js 15.4.10
+   - Environments: .env
+
+   Creating an optimized production build ...
+glob error [Error: EACCES: permission denied, scandir 'C:\Users\48728\Desktop\black\centrum-spotkan-black\.pnpm-store\v10\projects\e5cd83cbf26fee313bce8aeeb85eb6f7'] {
+  errno: -4092,
+  code: 'EACCES',
+  syscall: 'scandir',
+  path: 'C:\\Users\\48728\\Desktop\\black\\centrum-spotkan-black\\.pnpm-store\\v10\\projects\\e5cd83cbf26fee313bce8aeeb85eb6f7'
+}
+Failed to compile.
+
+Error: EACCES: permission denied, scandir 'C:\Users\48728\Desktop\black\centrum-spotkan-black\.pnpm-store\v10\projects\e5cd83cbf26fee313bce8aeeb85eb6f7'
+
+HookWebpackError: Cannot read properties of undefined (reading 'server')
+    at makeWebpackError (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:29:315765)
+    at C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:29:106471
+    at eval (eval at create (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:14:9224), <anonymous>:20:1)
+-- inner error --
+TypeError: Cannot read properties of undefined (reading 'server')
+    at FlightClientEntryPlugin.createActionAssets (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\build\webpack\plugins\flight-client-entry-plugin.js:675:68)
+    at C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\build\webpack\plugins\flight-client-entry-plugin.js:170:25
+    at fn (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:29:70186)
+    at _next7 (eval at create (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:14:9224), <anonymous>:12:17)
+    at eval (eval at create (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:14:9224), <anonymous>:31:1)
+caused by plugins in Compilation.hooks.processAssets
+TypeError: Cannot read properties of undefined (reading 'server')
+    at FlightClientEntryPlugin.createActionAssets (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\build\webpack\plugins\flight-client-entry-plugin.js:675:68)
+    at C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\build\webpack\plugins\flight-client-entry-plugin.js:170:25
+    at fn (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:29:70186)
+    at _next7 (eval at create (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:14:9224), <anonymous>:12:17)
+    at eval (eval at create (C:\Users\48728\Desktop\black\centrum-spotkan-black\node_modules\.pnpm\next@15.4.10_@babel+core@7._a8cb9100fe6361a00655d7ad06bce434\node_modules\next\dist\compiled\webpack\bundle5.js:14:9224), <anonymous>:31:1)
+
+
+> Build failed because of webpack errors
+ ELIFECYCLE  Command failed with exit code 1.

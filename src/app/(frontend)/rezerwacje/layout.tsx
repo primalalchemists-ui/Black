@@ -1,0 +1,22 @@
+import type { ReactNode } from "react";
+import { Separator } from "@/components/ui/separator";
+import { ReservationNav } from "@/components/reservations/ReservationNav";
+
+export default function RezerwacjeLayout({ children }: { children: ReactNode }) {
+  return (
+    <section aria-label="Rezerwacje" className="space-y-6 p-4">
+      <header className="space-y-2">
+        <h1 className="text-3xl font-semibold">Rezerwacje</h1>
+        <p className="text-muted-foreground">
+          Wybierz usługę i zarezerwuj termin.
+        </p>
+      </header>
+
+      <ReservationNav />
+
+      <Separator />
+
+      <div>{children}</div>
+    </section>
+  );
+}

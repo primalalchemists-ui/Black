@@ -1,0 +1,530 @@
+// src/collections/Reservations.ts
+import type { CollectionConfig } from "payload";
+import { expectedResourceTypeByReservationType } from "@/lib/resourceFilters";
+import type { ReservationType } from "@/lib/resourceFilters";
+
+const isStaffOrAdmin = ({ req }: any) => ["admin", "staff"].includes(req.user?.role);
+
+const hourOptions = Array.from({ length: 24 }, (_, h) => ({
+  label: `${String(h).padStart(2, "0")}:00`,
+  value: String(h),
+}));
+
+const minuteOptions = [
+  { label: "00", value: "0" },
+  { label: "15", value: "15" },
+  { label: "30", value: "30" },
+  { label: "45", value: "45" },
+];
+
+function clampPartySize(n: unknown) {
+  const x = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(x)) return 1;
+  return Math.min(12, Math.max(1, Math.floor(x)));
+}
+
+function tablesNeededFromPartySize(partySize: unknown) {
+  const ps = clampPartySize(partySize);
+  return Math.max(1, Math.ceil(ps / 4));
+}
+
+/**
+ * ✅ UTC-stabilne ISO z pola day + hour + minute
+ */
+function buildDateTimeFromDayHourMinuteUTC(day: string | Date, hourStr: string, minuteStr: string) {
+  const base = new Date(day);
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const d = base.getUTCDate();
+
+  const h = Number(hourStr);
+  const min = Number(minuteStr);
+
+  const utc = new Date(Date.UTC(y, m, d, h, min, 0, 0));
+  return utc.toISOString();
+}
+
+// =======================
+// ✅ ANTI-OVERLAP + PAST GUARDS
+// =======================
+
+const IGNORED_STATUSES = ["cancelled", "no_show"] as const;
+
+// UWAGA: completed traktujemy jako "historyczne" i NIE blokujemy (dla staff/admin)
+// Jeśli chcesz jednak też blokować completed, usuń go z logiki poniżej.
+function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime();
+}
+
+function relIds(val: any): string[] {
+  if (!Array.isArray(val)) return [];
+  return val
+    .map((x) => {
+      if (!x) return null;
+      if (typeof x === "string" || typeof x === "number") return String(x);
+      if (typeof x === "object") {
+        if (x.id != null) return String(x.id);
+        if (x._id != null) return String(x._id);
+        if (x.value != null) {
+          const v = x.value;
+          if (typeof v === "string" || typeof v === "number") return String(v);
+          if (v?.id != null) return String(v.id);
+          if (v?._id != null) return String(v._id);
+        }
+      }
+      return null;
+    })
+    .filter(Boolean) as string[];
+}
+
+export const Reservations: CollectionConfig = {
+  slug: "reservations",
+  labels: { singular: "Rezerwacja", plural: "Rezerwacje" },
+
+  admin: {
+    group: "Rezerwacje",
+    defaultColumns: ["type", "startsAt", "status", "customer.phone", "paymentStatus"],
+  },
+
+  access: {
+    read: isStaffOrAdmin,
+    create: () => true,
+    update: isStaffOrAdmin,
+    delete: ({ req }: any) => req.user?.role === "admin",
+  },
+
+  hooks: {
+    beforeValidate: [
+      ({ data }) => {
+        const type = data?.type as ReservationType | undefined;
+        if (!data || !type) return data;
+
+        // Czyścimy pola, które nie pasują do typu
+        if (type !== "stolik") {
+          delete (data as any).partySize;
+          delete (data as any).tablesCount;
+        }
+        if (type !== "kregle" && type !== "bilard") {
+          delete (data as any).resources;
+        }
+        if (type !== "biznes") {
+          delete (data as any).event;
+          delete (data as any).disabledPerson;
+          delete (data as any).disabilityDetails;
+        }
+
+        // ✅ dla stolików: twardy limit + automatyczne tablesCount
+        if (type === "stolik") {
+          const ps = clampPartySize((data as any).partySize ?? 1);
+          (data as any).partySize = ps;
+          (data as any).tablesCount = tablesNeededFromPartySize(ps);
+        }
+
+        // ===== USTAWIANIE startsAt/endsAt z UI pól (day + time) =====
+        if ((data as any).day) {
+          const day = (data as any).day as any;
+          const allDay = Boolean((data as any).allDay);
+
+          if (allDay) {
+            const start = new Date(day);
+            start.setUTCHours(0, 0, 0, 0);
+
+            const end = new Date(day);
+            end.setUTCHours(23, 59, 59, 999);
+
+            (data as any).startsAt = start.toISOString();
+            (data as any).endsAt = end.toISOString();
+          } else {
+            const startHour = String((data as any).startHour ?? "0");
+            const startMinute = String((data as any).startMinute ?? "0");
+
+            const endHour = (data as any).endHour != null ? String((data as any).endHour) : "";
+            const endMinute = (data as any).endMinute != null ? String((data as any).endMinute) : "";
+
+            (data as any).startsAt = buildDateTimeFromDayHourMinuteUTC(day, startHour, startMinute);
+
+            if (endHour !== "" && endMinute !== "") {
+              const endsAtIso = buildDateTimeFromDayHourMinuteUTC(day, endHour, endMinute);
+
+              const startD = new Date((data as any).startsAt);
+              const endD = new Date(endsAtIso);
+
+              if (endD <= startD) {
+                throw new Error("Czas „Koniec” musi być późniejszy niż „Start”.");
+              }
+
+              (data as any).endsAt = endsAtIso;
+            } else {
+              (data as any).endsAt = undefined;
+            }
+          }
+        }
+
+        return data;
+      },
+    ],
+
+    // ✅ BLOKADA KOLIZJI + BLOKADA PRZESZŁOŚCI (działa też w panelu)
+    beforeChange: [
+      async ({ data, req, operation, originalDoc }) => {
+        const incoming: any = data || {};
+        const type = String(incoming.type ?? originalDoc?.type ?? "");
+        const status = String(incoming.status ?? originalDoc?.status ?? "");
+        const source = String(incoming.source ?? originalDoc?.source ?? "online");
+
+        // 1) interesuje nas tylko bilard/kręgle
+        if (type !== "kregle" && type !== "bilard") return data;
+
+        // 2) ignoruj statusy, które nie blokują dostępności
+        if (IGNORED_STATUSES.includes(status as any)) return data;
+
+        const startsAtStr = String(incoming.startsAt ?? originalDoc?.startsAt ?? "");
+        const endsAtStr = String(incoming.endsAt ?? originalDoc?.endsAt ?? "");
+        if (!startsAtStr || !endsAtStr) return data;
+
+        const startsAt = new Date(startsAtStr);
+        const endsAt = new Date(endsAtStr);
+        if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) return data;
+
+        // 3) BLOKADA PRZESZŁOŚCI:
+        // - online: zawsze blok
+        // - staff/admin: blok, chyba że status=completed (np. dopisanie historycznej)
+        const isStaff = ["admin", "staff"].includes(req.user?.role);
+        const now = new Date();
+
+        const allowPastBecauseCompleted = isStaff && status === "completed";
+        const mustBlockPast =
+          !allowPastBecauseCompleted && startsAt.getTime() < now.getTime();
+
+        if (mustBlockPast) {
+          throw new Error("Nie można tworzyć rezerwacji w przeszłości.");
+        }
+
+        // 4) zasoby
+        const resources = relIds(incoming.resources ?? originalDoc?.resources);
+        if (!resources.length) return data;
+
+        // 5) pomiń samego siebie przy update
+        const idToIgnore = operation === "update" ? String(originalDoc?.id) : null;
+
+        // 6) pobierz kandydatów (tylko te, które czasowo mogą kolidować)
+        const candidates = await req.payload.find({
+          collection: "reservations",
+          limit: 2000,
+          where: {
+            and: [
+              { type: { equals: type } },
+              { status: { not_in: [...IGNORED_STATUSES] } as any },
+              { startsAt: { less_than: endsAt.toISOString() } },
+              { endsAt: { greater_than: startsAt.toISOString() } },
+              ...(idToIgnore ? [{ id: { not_equals: idToIgnore } }] : []),
+            ],
+          },
+        });
+
+        for (const r of (candidates.docs || []) as any[]) {
+          // jeśli kandydat też jest cancelled/no_show to pomiń (na wypadek)
+          const rStatus = String(r.status ?? "");
+          if (IGNORED_STATUSES.includes(rStatus as any)) continue;
+
+          // (opcjonalnie) jeśli chcesz, aby completed NIE blokowało dostępności, odkomentuj:
+          // if (rStatus === "completed") continue;
+
+          const otherResources = relIds(r.resources);
+          const touchesSame = otherResources.some((id) => resources.includes(id));
+          if (!touchesSame) continue;
+
+          const rStart = new Date(r.startsAt);
+          const rEnd = new Date(r.endsAt);
+          if (isNaN(rStart.getTime()) || isNaN(rEnd.getTime())) continue;
+
+          if (overlaps(rStart, rEnd, startsAt, endsAt)) {
+            throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+          }
+        }
+
+        return data;
+      },
+    ],
+  },
+
+  fields: [
+    {
+      name: "type",
+      label: "Typ rezerwacji",
+      type: "select",
+      required: true,
+      options: [
+        { label: "Stoliki", value: "stolik" },
+        { label: "Kręgle", value: "kregle" },
+        { label: "Bilard", value: "bilard" },
+        { label: "Biznes (zapis na wydarzenie)", value: "biznes" },
+      ],
+    },
+
+    {
+      name: "customer",
+      label: "Dane klienta",
+      type: "group",
+      fields: [
+        { name: "firstName", label: "Imię", type: "text", required: true },
+        { name: "lastName", label: "Nazwisko", type: "text", required: true },
+        { name: "phone", label: "Telefon", type: "text", required: true },
+        { name: "email", label: "E-mail", type: "email", required: true },
+      ],
+    },
+
+    { name: "notes", label: "Uwagi", type: "textarea" },
+
+    {
+      name: "day",
+      label: "Dzień",
+      type: "date",
+      required: true,
+      admin: { description: "Wybierz dzień rezerwacji. Godzinę i minutę ustawisz poniżej." },
+    },
+    { name: "allDay", label: "Całodniowe", type: "checkbox", defaultValue: false },
+
+    {
+      name: "startHour",
+      label: "Start (godzina)",
+      type: "select",
+      required: true,
+      options: hourOptions,
+      defaultValue: "18",
+      admin: { condition: (_, s) => !s?.allDay },
+    },
+    {
+      name: "startMinute",
+      label: "Start (minuta)",
+      type: "select",
+      required: true,
+      options: minuteOptions,
+      defaultValue: "0",
+      admin: { condition: (_, s) => !s?.allDay },
+    },
+
+    {
+      name: "endHour",
+      label: "Koniec (godzina)",
+      type: "select",
+      required: false,
+      options: hourOptions,
+      admin: { condition: (_, s) => !s?.allDay },
+    },
+    {
+      name: "endMinute",
+      label: "Koniec (minuta)",
+      type: "select",
+      required: false,
+      options: minuteOptions,
+      admin: { condition: (_, s) => !s?.allDay },
+      validate: (val, { siblingData }) => {
+        if (siblingData?.allDay) return true;
+
+        const endHour = siblingData?.endHour;
+        const endMinute = val;
+
+        const endHourEmpty = endHour == null || endHour === "";
+        const endMinuteEmpty = endMinute == null || endMinute === "";
+
+        if (endHourEmpty && endMinuteEmpty) return true;
+        if (endHourEmpty !== endMinuteEmpty) return "Ustaw zarówno godzinę, jak i minutę końca.";
+
+        const day = siblingData?.day;
+        if (!day) return true;
+
+        const startIso = buildDateTimeFromDayHourMinuteUTC(day, String(siblingData?.startHour ?? "0"), String(siblingData?.startMinute ?? "0"));
+        const endIso = buildDateTimeFromDayHourMinuteUTC(day, String(endHour), String(endMinute));
+
+        if (new Date(endIso) <= new Date(startIso)) return "Czas „Koniec” musi być późniejszy niż „Start”.";
+        return true;
+      },
+    },
+
+    // ===== TECHNICZNE DATY (hidden) =====
+    {
+      name: "startsAt",
+      label: "Start (timestamp)",
+      type: "date",
+      required: true,
+      admin: { readOnly: true, hidden: true },
+    },
+    {
+      name: "endsAt",
+      label: "Koniec (timestamp)",
+      type: "date",
+      admin: { readOnly: true, hidden: true },
+    },
+
+    // Stoliki
+    {
+      name: "partySize",
+      label: "Liczba osób",
+      type: "number",
+      admin: { condition: (_, s) => s?.type === "stolik" },
+      validate: (val, { siblingData }) => {
+        if (siblingData?.type !== "stolik") return true;
+        const ps = clampPartySize(val as any);
+        if (ps < 1) return "Podaj liczbę osób.";
+        if (ps > 12) return "Maksymalnie 12 osób.";
+        return true;
+      },
+    },
+    {
+      name: "tablesCount",
+      label: "Liczba stolików",
+      type: "number",
+      admin: {
+        condition: (_, s) => s?.type === "stolik",
+        readOnly: true,
+        description: "Wyliczane automatycznie z liczby osób (1 stolik = 4 osoby).",
+      },
+      validate: (val, { siblingData }) => {
+        if (siblingData?.type !== "stolik") return true;
+        if (typeof val !== "number" || val <= 0) return "Podaj liczbę stolików.";
+        return true;
+      },
+    },
+
+    // Kręgle/Bilard – zasoby (z filtrem)
+    {
+      name: "resources",
+      label: "Zasoby (tory / stoły)",
+      type: "relationship",
+      relationTo: "resources",
+      hasMany: true,
+      admin: {
+        condition: (_, s) => s?.type === "kregle" || s?.type === "bilard",
+        description: "Najpierw wybierz typ rezerwacji (Kręgle/Bilard) — lista zasobów przefiltruje się automatycznie.",
+      },
+      filterOptions: ({ siblingData }) => {
+        const t = siblingData?.type as ReservationType | undefined;
+        const expected = t ? expectedResourceTypeByReservationType[t] : undefined;
+
+        if (!expected) return { id: { exists: false } };
+
+        return {
+          type: { equals: expected },
+          active: { equals: true },
+        };
+      },
+      validate: (val, { siblingData }) => {
+        const t = siblingData?.type as ReservationType | undefined;
+        if (t !== "kregle" && t !== "bilard") return true;
+        if (!Array.isArray(val) || val.length === 0) return "Wybierz co najmniej jeden zasób.";
+        return true;
+      },
+    },
+
+    // Biznes
+    {
+      name: "event",
+      label: "Wydarzenie (biznes)",
+      type: "relationship",
+      relationTo: "events",
+      admin: { condition: (_, s) => s?.type === "biznes" },
+      validate: (val, { siblingData }) => {
+        if (siblingData?.type !== "biznes") return true;
+        if (!val) return "Wybierz wydarzenie.";
+        return true;
+      },
+    },
+    {
+      name: "disabledPerson",
+      label: "Osoba z niepełnosprawnością",
+      type: "checkbox",
+      defaultValue: false,
+      admin: { condition: (_, s) => s?.type === "biznes" },
+    },
+    {
+      name: "disabilityDetails",
+      label: "Opis niepełnosprawności",
+      type: "textarea",
+      admin: { condition: (_, s) => s?.type === "biznes" && s?.disabledPerson },
+    },
+
+    // Faktura
+    {
+      name: "invoice",
+      label: "Faktura",
+      type: "group",
+      fields: [
+        { name: "wantInvoice", label: "Chcę fakturę", type: "checkbox", defaultValue: false },
+        {
+          name: "nip",
+          label: "NIP",
+          type: "text",
+          admin: {
+            condition: (_, siblingData) => Boolean(siblingData?.wantInvoice),
+            description: "Pole wymagane, jeśli klient chce fakturę.",
+          },
+          validate: (val, { siblingData }) => {
+            if (!siblingData?.wantInvoice) return true;
+            if (!val || String(val).trim().length === 0) return "Podaj NIP.";
+            const digits = String(val).replace(/\D/g, "");
+            if (digits.length !== 10) return "NIP powinien mieć 10 cyfr.";
+            return true;
+          },
+        },
+      ],
+    },
+
+    { name: "acceptRules", label: "Akceptacja regulaminu", type: "checkbox", required: true, defaultValue: false },
+
+    {
+      name: "source",
+      label: "Źródło",
+      type: "select",
+      required: true,
+      defaultValue: "online",
+      options: [
+        { label: "Online", value: "online" },
+        { label: "Telefon", value: "phone" },
+        { label: "Obsługa", value: "staff" },
+      ],
+    },
+
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      required: true,
+      defaultValue: "new",
+      options: [
+        { label: "Nowe", value: "new" },
+        { label: "Potwierdzone", value: "confirmed" },
+        { label: "Anulowane", value: "cancelled" },
+        { label: "Niepojawienie", value: "no_show" },
+        { label: "Zakończone", value: "completed" },
+      ],
+    },
+
+    // Płatności
+    { name: "depositRequired", label: "Wymagana zaliczka", type: "checkbox", defaultValue: false },
+    { name: "depositAmount", label: "Kwota zaliczki (PLN)", type: "number" },
+
+    {
+      name: "paymentStatus",
+      label: "Status płatności",
+      type: "select",
+      required: true,
+      defaultValue: "not_required",
+      options: [
+        { label: "Nie dotyczy", value: "not_required" },
+        { label: "Oczekuje", value: "pending" },
+        { label: "Opłacone", value: "paid" },
+        { label: "Nieudane", value: "failed" },
+        { label: "Zwrot", value: "refunded" },
+        { label: "Przepadło", value: "forfeited" },
+      ],
+    },
+    {
+      name: "paymentProvider",
+      label: "Operator płatności",
+      type: "select",
+      options: [{ label: "Przelewy24", value: "p24" }],
+    },
+    { name: "payment", label: "Płatność", type: "relationship", relationTo: "payments" },
+  ],
+};
