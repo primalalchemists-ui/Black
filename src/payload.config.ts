@@ -90,17 +90,14 @@ import { ReservationSettings } from './globals/ReservationSettings'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
-/**
- * Fail fast — jeśli Railway nie poda DATABASE_URL albo coś nadpisuje,
- * zobaczysz to od razu w logach zamiast błędów typu "base / ENOTFOUND".
- */
-const DATABASE_URL = process.env.DATABASE_URL
+// Build-safe: na Railway env czasem nie jest dostępny w trakcie next build.
+// Nie wywalaj builda — tylko ostrzeż, runtime i tak musi mieć DATABASE_URL.
+const DATABASE_URL = process.env.DATABASE_URL || ''
 if (!DATABASE_URL) {
-  throw new Error('Missing DATABASE_URL env var. Add a Railway Variable Reference from Postgres -> DATABASE_URL.')
+  console.warn(
+    '[Payload] DATABASE_URL is missing (likely during build). Ensure Railway provides it at runtime via Variable Reference.',
+  )
 }
-
-// Opcjonalny mini-debug (możesz usunąć po naprawie):
-// console.log('DB host:', DATABASE_URL.split('@')[1]?.split('/')[0])
 
 export default buildConfig({
   admin: {
@@ -109,7 +106,6 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-
   collections: [
     Users,
     Media,
@@ -122,13 +118,10 @@ export default buildConfig({
     Payments,
     Blackouts,
   ],
-
   globals: [SiteSettings, DishOfDay, ReservationSettings],
 
   editor: lexicalEditor(),
-
   secret: process.env.PAYLOAD_SECRET || '',
-
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
@@ -136,12 +129,7 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: DATABASE_URL,
-
-      /**
-       * Jeśli używasz "DATABASE_PUBLIC_URL" zamiast wewnętrznego DATABASE_URL,
-       * czasem trzeba włączyć SSL.
-       * Na wewnętrznym Railway zwykle nie trzeba.
-       */
+      // Jeśli kiedykolwiek użyjesz DATABASE_PUBLIC_URL w appce (nie polecam), wtedy czasem:
       // ssl: { rejectUnauthorized: false },
     },
   }),

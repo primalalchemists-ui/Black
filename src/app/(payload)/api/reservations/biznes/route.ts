@@ -3,9 +3,12 @@ import { getPayload } from "payload";
 import config from "@payload-config";
 
 import { businessRequestSchema } from "@/lib/validation/reservations";
-import { mailTransport, getMailFrom, getOwnerTo } from "@/lib/mail";
+import { getMailTransport, getMailFrom, getOwnerTo } from "@/lib/mail";
 import { reservationClientText, reservationOwnerText } from "@/lib/mailTemplates";
 import { getEventDisplayDateTimePL } from "@/lib/cms/events";
+
+// Ważne na Railway/Next build: nie prerenderuj / nie collect page data dla route handlers
+export const dynamic = "force-dynamic";
 
 type Issue = { path: (string | number)[]; message: string };
 
@@ -72,7 +75,9 @@ export async function POST(req: Request) {
   }
 
   if (!event || !event.published || event.status !== "planned" || !event.registrationsEnabled) {
-    return json409("NO_AVAILABILITY", [{ path: ["eventId"], message: "Zapisy na to wydarzenie są wyłączone." }]);
+    return json409("NO_AVAILABILITY", [
+      { path: ["eventId"], message: "Zapisy na to wydarzenie są wyłączone." },
+    ]);
   }
 
   const startsAt = new Date(event.startsAt);
@@ -93,7 +98,9 @@ export async function POST(req: Request) {
     try {
       const ok = await decrementCapacityOrFail(payload, eventId);
       if (!ok) {
-        return json409("NO_AVAILABILITY", [{ path: ["eventId"], message: "Brak wolnych miejsc (limit wyczerpany)." }]);
+        return json409("NO_AVAILABILITY", [
+          { path: ["eventId"], message: "Brak wolnych miejsc (limit wyczerpany)." },
+        ]);
       }
       decremented = true;
     } catch (e: any) {
@@ -148,57 +155,61 @@ export async function POST(req: Request) {
         paymentStatus: "pending",
 
         // ✅ TU ZAPISUJEMY KWOTĘ Z EVENTU
-        // Z Twojego screena to jest pole "Kwota zaliczki (PLN)".
-        // Jeśli u Ciebie ma inną nazwę w kolekcji reservations -> podmień nazwę poniżej.
         depositRequired: pricePLN > 0,
         depositAmount: pricePLN,
       },
     });
 
     // ====== MAIL SECTION ======
-    const dt = getEventDisplayDateTimePL(event);
-    const eventTitle = event?.title ?? "Wydarzenie biznesowe";
-    const dateLabel = dt?.date ?? "—";
-    const timeLabel = dt?.time ?? "—";
+    // Mail jest "best-effort": jeśli env od maila nie jest ustawione, rezerwacja ma się nadal utworzyć.
+    try {
+      const dt = getEventDisplayDateTimePL(event);
+      const eventTitle = event?.title ?? "Wydarzenie biznesowe";
+      const dateLabel = dt?.date ?? "—";
+      const timeLabel = dt?.time ?? "—";
 
-    const from = getMailFrom();
-    const ownerTo = getOwnerTo();
+      const from = getMailFrom();
+      const ownerTo = getOwnerTo();
+      const mailTransport = getMailTransport();
 
-    await mailTransport.sendMail({
-      from,
-      to: ownerTo,
-      subject: `Rezerwacja: ${eventTitle} — ${data.firstName} ${data.lastName}`,
-      text: reservationOwnerText({
-        eventTitle,
-        dateLabel,
-        timeLabel,
-        pricePLN,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        email: data.email,
-        disabledPerson: Boolean(data.disabledPerson),
-        disabilityDetails: data.disabilityDetails || "",
-        wantInvoice: Boolean(data.wantInvoice),
-        nip: data.nip || "",
-        notes: data.notes || "",
-      }),
-      replyTo: data.email,
-    });
+      await mailTransport.sendMail({
+        from,
+        to: ownerTo,
+        subject: `Rezerwacja: ${eventTitle} — ${data.firstName} ${data.lastName}`,
+        text: reservationOwnerText({
+          eventTitle,
+          dateLabel,
+          timeLabel,
+          pricePLN,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone,
+          email: data.email,
+          disabledPerson: Boolean(data.disabledPerson),
+          disabilityDetails: data.disabilityDetails || "",
+          wantInvoice: Boolean(data.wantInvoice),
+          nip: data.nip || "",
+          notes: data.notes || "",
+        }),
+        replyTo: data.email,
+      });
 
-    await mailTransport.sendMail({
-      from,
-      to: data.email,
-      subject: `Potwierdzenie rezerwacji: ${eventTitle}`,
-      text: reservationClientText({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        eventTitle,
-        dateLabel,
-        timeLabel,
-        pricePLN,
-      }),
-    });
+      await mailTransport.sendMail({
+        from,
+        to: data.email,
+        subject: `Potwierdzenie rezerwacji: ${eventTitle}`,
+        text: reservationClientText({
+          firstName: data.firstName,
+          lastName: data.lastName,
+          eventTitle,
+          dateLabel,
+          timeLabel,
+          pricePLN,
+        }),
+      });
+    } catch (mailErr: any) {
+      console.warn("[MAIL] skipped / failed:", mailErr?.message || mailErr);
+    }
     // ====== /MAIL SECTION ======
 
     return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
