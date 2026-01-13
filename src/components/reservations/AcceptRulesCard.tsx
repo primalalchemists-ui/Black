@@ -17,6 +17,7 @@ type Props = {
   trigger: UseFormTrigger<FieldValues>
   errors: FieldErrors<FieldValues>
   label?: string
+  /** Endpoint, który zwraca PDF z Content-Disposition: attachment */
   href?: string
 }
 
@@ -25,7 +26,7 @@ export function AcceptRulesCard({
   trigger,
   errors,
   label = "Akceptuję regulamin obiektu",
-  href = "/regulamin-obiektu.pdf",
+  href = "/api/regulamin",
 }: Props) {
   const labelId = "acceptRules-label"
   const descId = "acceptRules-desc"
@@ -43,7 +44,9 @@ export function AcceptRulesCard({
                 id="acceptRules"
                 checked={Boolean(field.value)}
                 aria-labelledby={labelId}
-                aria-describedby={`${descId}${(errors as any)?.acceptRules?.message ? ` ${errorId}` : ""}`}
+                aria-describedby={`${descId}${
+                  (errors as any)?.acceptRules?.message ? ` ${errorId}` : ""
+                }`}
                 onCheckedChange={(v) => {
                   field.onChange(Boolean(v))
                   trigger("acceptRules")
@@ -51,11 +54,9 @@ export function AcceptRulesCard({
               />
 
               <div className="grid gap-1 leading-none">
-                {/* Zamiast htmlFor: poprawne powiązanie przez aria-labelledby */}
                 <span
                   id={labelId}
                   className="text-sm font-medium leading-none"
-                  // UX: klik w tekst też przełącza
                   onClick={() => {
                     const next = !Boolean(field.value)
                     field.onChange(next)
@@ -77,12 +78,17 @@ export function AcceptRulesCard({
 
                 <p id={descId} className="text-sm text-muted-foreground">
                   Regulamin do pobrania:{" "}
-                  <a className="underline" href={href}>
+                  <a
+                    className="underline"
+                    href={href}
+                    // server wymusza attachment, ale zostawiamy też atrybut download jako bonus
+                    download
+                    rel="noopener noreferrer"
+                  >
                     pobierz PDF
                   </a>
                 </p>
 
-                {/* Slot error: powiązany aria-describedby */}
                 <div id={errorId}>
                   <ErrorSlot message={(errors as any)?.acceptRules?.message} />
                 </div>
