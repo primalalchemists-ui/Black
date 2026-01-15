@@ -303,14 +303,14 @@ export function ResourceGrid({
         transition={{ duration: 0.35, ease: "easeOut" }}
         style={{ pointerEvents: isGatedLoading ? "none" : "auto" }}
       >
-        <div className="grid gap-3">
+        <div className="grid gap-3 mt-2">
           <div className="text-sm text-muted-foreground">
             Kolory: <span className="font-medium text-green-700">wolne</span>,{" "}
             <span className="font-medium text-red-600">zajęte</span>,{" "}
             <span className="font-medium text-black">niedostępne</span>.
             <br />
             Każdy {resourceLabel.toLowerCase()} wybierasz <b>osobno</b>. Klikasz kolejne godziny <b>ciągiem</b>, a klik w już
-            wybrane usuwa wybór dla tego {resourceLabel.toLowerCase()}.
+            wybrane usuwa wybór.
           </div>
 
           {!enabled ? (
@@ -320,9 +320,9 @@ export function ResourceGrid({
             </div>
           ) : null}
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto mt-8">
             <div className="min-w-[720px]">
-              <div className="grid" style={{ gridTemplateColumns: `120px repeat(${resources.length}, 1fr)` }}>
+              <div className="grid" style={{ gridTemplateColumns: `60px repeat(${resources.length}, 1fr)` }}>
                 <div />
                 {resources.map((r) => (
                   <div key={r.id} className="pb-2 text-center text-sm font-semibold">
@@ -331,9 +331,9 @@ export function ResourceGrid({
                 ))}
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid gap-2 mt-1">
                 {times.map((t, idx) => (
-                  <div key={t} className="grid items-center gap-2" style={{ gridTemplateColumns: `120px repeat(${resources.length}, 1fr)` }}>
+                  <div key={t} className="grid items-center gap-2" style={{ gridTemplateColumns: `60px repeat(${resources.length}, 1fr)` }}>
                     <div className="text-sm text-muted-foreground">{t}</div>
 
                     {resources.map((rr) => {
@@ -341,20 +341,47 @@ export function ResourceGrid({
                       const st = getStatus(rNum, t);
                       const sel = isSelected(rNum, idx);
 
-                      const base = "h-10 w-full rounded-md border transition";
-                      const color = st === "free" ? "bg-green-600/80 hover:bg-green-600" : st === "busy" ? "bg-red-600/80" : "bg-black/80";
-                      const ring = sel ? "ring-2 ring-black" : "";
+                      // const base = "h-10 w-full rounded-md border transition";
+                      // const color = st === "free" ? "bg-green-600/80 hover:bg-green-600" : st === "busy" ? "bg-red-600/80" : "bg-black/80";
+                      // const ring = sel ? "ring-2 ring-black" : "";
+
+                      const base = "relative h-10 w-full rounded-md border transition-colors";
+                      const color =
+                        st === "free"
+                          ? "bg-green-600/80 hover:bg-green-600"
+                          : st === "busy"
+                            ? "bg-red-600/80"
+                            : "bg-black/80";
+
+                      // const ring = sel ? "outline outline-2 outline-black outline-offset-2" : "";
 
                       return (
+                        // <button
+                        //   key={`${rNum}-${t}`}
+                        //   type="button"
+                        //   onClick={() => onCellClick(rNum, idx)}
+                        //   disabled={st !== "free"}
+                        //   className={[base, color, ring].join(" ")}
+                        //   aria-label={`${resourceLabel} ${rNum}, ${t}, status ${st}`}
+                        //   title={st === "free" ? "Wolne" : st === "busy" ? "Zajęte" : "Niedostępne"}
+                        // />
                         <button
                           key={`${rNum}-${t}`}
                           type="button"
                           onClick={() => onCellClick(rNum, idx)}
                           disabled={st !== "free"}
-                          className={[base, color, ring].join(" ")}
+                          className={[base, color].join(" ")}
                           aria-label={`${resourceLabel} ${rNum}, ${t}, status ${st}`}
                           title={st === "free" ? "Wolne" : st === "busy" ? "Zajęte" : "Niedostępne"}
-                        />
+                        >
+                          {sel ? (
+                            <span
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0 rounded-md border-2 border-black"
+                            />
+                          ) : null}
+                        </button>
+
                       );
                     })}
                   </div>
@@ -363,7 +390,7 @@ export function ResourceGrid({
             </div>
           </div>
 
-          <div className="rounded-lg border p-4">
+          <div className="rounded-lg border p-4 mt-8">
             <div className="text-sm text-muted-foreground">Wybrano</div>
 
             {!segments.length ? (

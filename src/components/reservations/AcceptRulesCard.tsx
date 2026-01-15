@@ -16,40 +16,51 @@ type Props = {
   control: Control<FieldValues>
   trigger: UseFormTrigger<FieldValues>
   errors: FieldErrors<FieldValues>
+
+  /** nazwa pola w RHF (np. "acceptPrivacyPolicy") */
+  name?: string
+
   label?: string
   /** Endpoint, który zwraca PDF z Content-Disposition: attachment */
   href?: string
+
+  /** do aria/id żeby nie było kolizji */
+  idPrefix?: string
 }
 
 export function AcceptRulesCard({
   control,
   trigger,
   errors,
+
+  name = "acceptRules",
   label = "Akceptuję regulamin obiektu",
   href = "/api/regulamin",
+  idPrefix = "acceptRules",
 }: Props) {
-  const labelId = "acceptRules-label"
-  const descId = "acceptRules-desc"
-  const errorId = "acceptRules-error"
+  const labelId = `${idPrefix}-label`
+  const descId = `${idPrefix}-desc`
+  const errorId = `${idPrefix}-error`
+  const checkboxId = idPrefix
+
+  const errMsg = (errors as any)?.[name]?.message
 
   return (
     <Card>
       <CardContent className="pt-6">
         <Controller
-          name="acceptRules"
+          name={name as any}
           control={control}
           render={({ field }) => (
             <div className="flex items-start gap-3">
               <Checkbox
-                id="acceptRules"
+                id={checkboxId}
                 checked={Boolean(field.value)}
                 aria-labelledby={labelId}
-                aria-describedby={`${descId}${
-                  (errors as any)?.acceptRules?.message ? ` ${errorId}` : ""
-                }`}
+                aria-describedby={`${descId}${errMsg ? ` ${errorId}` : ""}`}
                 onCheckedChange={(v) => {
                   field.onChange(Boolean(v))
-                  trigger("acceptRules")
+                  trigger(name as any)
                 }}
               />
 
@@ -60,28 +71,32 @@ export function AcceptRulesCard({
                   onClick={() => {
                     const next = !Boolean(field.value)
                     field.onChange(next)
-                    trigger("acceptRules")
+                    trigger(name as any)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
                       const next = !Boolean(field.value)
                       field.onChange(next)
-                      trigger("acceptRules")
+                      trigger(name as any)
                     }
                   }}
                   role="button"
                   tabIndex={0}
                 >
-                  {label}
+                 <span
+                  aria-hidden="true"
+                  className="font-semibold text-red-600"
+                >
+                  *
+                </span> {label}   
                 </span>
 
-                <p id={descId} className="text-sm text-muted-foreground">
-                  Regulamin do pobrania:{" "}
+                <p id={descId} className="ml-2 text-sm text-muted-foreground">
+                  Dokument do pobrania:{" "}
                   <a
                     className="underline"
                     href={href}
-                    // server wymusza attachment, ale zostawiamy też atrybut download jako bonus
                     download
                     rel="noopener noreferrer"
                   >
@@ -90,12 +105,13 @@ export function AcceptRulesCard({
                 </p>
 
                 <div id={errorId}>
-                  <ErrorSlot message={(errors as any)?.acceptRules?.message} />
+                  <ErrorSlot message={errMsg} />
                 </div>
               </div>
             </div>
           )}
         />
+      
       </CardContent>
     </Card>
   )

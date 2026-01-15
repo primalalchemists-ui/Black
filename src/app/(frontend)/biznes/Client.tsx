@@ -22,6 +22,7 @@ import { CompanyNipFields } from "@/components/reservations/CompanyNipFields"
 
 import { occasionalInquirySchema, type OccasionalInquiry } from "@/lib/validation/occasionalInquiry"
 import { FadeInImage } from "@/components/ui/FadeInImage"
+import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard"
 
 type CmsEvent = {
   id: string
@@ -232,6 +233,7 @@ export default function RezerwacjeBiznesPage() {
     mode: "onTouched",
     reValidateMode: "onChange",
     shouldFocusError: false,
+    acceptPrivacyPolicy: false,
   })
 
   React.useEffect(() => {
@@ -430,6 +432,15 @@ export default function RezerwacjeBiznesPage() {
                         />
                         <ErrorSlot message={form.formState.errors?.message?.message} />
                       </div>
+                      <AcceptRulesCard
+                        control={form.control as any}
+                        trigger={form.trigger as any}
+                        errors={form.formState.errors as any}
+                        name="acceptPrivacyPolicy"
+                        idPrefix="acceptPrivacyPolicy"
+                        label="Akceptuję politykę prywatności"
+                        href="/api/privacy-policy"
+                      />
 
                       <div className="grid gap-2">
                         <p className="text-sm text-muted-foreground">Podaj jak najwięcej szczegółów, a my skontaktujemy się z Tobą.</p>

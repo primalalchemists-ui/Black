@@ -43,11 +43,26 @@ export const invoiceSchema = z
     }
   });
 
-export const acceptRulesSchema = z.object({
-  acceptRules: z.boolean().refine((v) => v === true, {
-    message: "Musisz zaakceptować regulamin obiektu",
-  }),
+// export const acceptRulesSchema = z.object({
+//   acceptRules: z.boolean().refine((v) => v === true, {
+//     message: "Musisz zaakceptować regulamin obiektu",
+//   }),
+// });
+
+export const acceptDocumentsSchema = z.object({
+  acceptRules: z
+    .boolean()
+    .default(false)
+    .refine((v) => v === true, { message: "Musisz zaakceptować regulamin obiektu" }),
+
+  acceptPrivacyPolicy: z
+    .boolean()
+    .default(false)
+    .refine((v) => v === true, { message: "Musisz zaakceptować politykę prywatności" }),
 });
+
+
+
 
 const isQuarterHourFloat = (n: number) => Number.isFinite(n) && Math.round(n * 4) === n * 4;
 
@@ -123,7 +138,7 @@ export const billiardsRequestSchema = z
   .merge(gridSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptRulesSchema);
+  .merge(acceptDocumentsSchema);
 
 export type BilliardsRequest = z.infer<typeof billiardsRequestSchema>;
 
@@ -132,7 +147,7 @@ export const bowlingRequestSchema = z
   .merge(gridSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptRulesSchema);
+  .merge(acceptDocumentsSchema);
 
 export type BowlingRequest = z.infer<typeof bowlingRequestSchema>;
 
@@ -141,7 +156,7 @@ export const tablesRequestSchema = z
   .merge(tablesSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptRulesSchema);
+  .merge(acceptDocumentsSchema);
 
 export type TablesRequest = z.infer<typeof tablesRequestSchema>;
 
@@ -150,7 +165,7 @@ export const businessRequestSchema = z
   .merge(businessSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptRulesSchema);
+  .merge(acceptDocumentsSchema);
 
 export type BusinessRequest = z.infer<typeof businessRequestSchema>;
 

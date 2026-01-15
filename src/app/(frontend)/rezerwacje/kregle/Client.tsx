@@ -133,6 +133,7 @@ export default function RezerwacjeKreglePage() {
       nip: "",
 
       acceptRules: false,
+      acceptPrivacyPolicy: false,
     },
     mode: "onTouched",
     reValidateMode: "onChange",
@@ -307,6 +308,16 @@ export default function RezerwacjeKreglePage() {
               </Card>
 
               <AcceptRulesCard control={form.control as any} trigger={form.trigger as any} errors={form.formState.errors as any} />
+
+              <AcceptRulesCard
+                control={form.control as any}
+                trigger={form.trigger as any}
+                errors={form.formState.errors as any}
+                name="acceptPrivacyPolicy"
+                idPrefix="acceptPrivacyPolicy"
+                label="Akceptuję politykę prywatności"
+                href="/api/privacy-policy"
+              />
 
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>

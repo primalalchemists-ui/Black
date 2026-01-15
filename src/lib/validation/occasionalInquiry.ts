@@ -4,7 +4,6 @@ const phonePL = z
   .string()
   .min(1, "Telefon jest wymagany")
   .trim()
-  // +48 optional, spacje/kreski optional, finalnie ma wyjść 9 cyfr
   .transform((v) => v.replace(/\s|-/g, ""))
   .refine((v) => {
     const vv = v.startsWith("+48") ? v.slice(3) : v;
@@ -35,10 +34,13 @@ export const occasionalInquirySchema = z
       .min(10, "Napisz proszę krótką wiadomość (min. 10 znaków)")
       .max(3000, "Za długa wiadomość"),
 
-    // acceptRules: z.boolean()
-    //   .refine((v) => v === true, { message: "Musisz zaakceptować regulamin obiektu" }),
+    // ✅ tylko polityka prywatności
+    acceptPrivacyPolicy: z.boolean().refine((v) => v === true, {
+      message: "Musisz zaakceptować politykę prywatności",
+    }),
   })
   .superRefine((val, ctx) => {
+    // ✅ NIP wymagany tylko gdy firma
     if (val.isCompany) {
       const res = nipPL.safeParse(val.nip ?? "");
       if (!res.success) {

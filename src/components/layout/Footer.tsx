@@ -33,6 +33,16 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
 
         </div>
 
+        <a
+          href="/api/privacy-policy"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          Polityka prywatności
+        </a>
+
+
         <div className="flex items-center gap-3">
           {settings?.facebook ? (
             <a

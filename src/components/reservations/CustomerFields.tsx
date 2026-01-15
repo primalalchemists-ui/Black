@@ -7,6 +7,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErrorSlot } from "@/components/forms/ErrorSlot";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
+function RequiredStar() {
+  return (
+    <span
+      aria-hidden="true"
+      className="ml-1 font-semibold text-red-600"
+    >
+      *
+    </span>
+  );
+}
+
+function fieldError(errors: any, name: string) {
+  return errors?.[name]?.message;
+}
+
 export function CustomerFields<T extends Record<string, any>>({
   register,
   errors,
@@ -14,40 +29,117 @@ export function CustomerFields<T extends Record<string, any>>({
   register: UseFormRegister<T>;
   errors: FieldErrors<T>;
 }) {
+  const firstNameError = fieldError(errors as any, "firstName");
+  const lastNameError = fieldError(errors as any, "lastName");
+  const phoneError = fieldError(errors as any, "phone");
+  const emailError = fieldError(errors as any, "email");
+  const notesError = fieldError(errors as any, "notes");
+
+  const inputBase =
+    "transition-colors focus-visible:ring-0"; // ring off, bo chcesz ramkę
+  const errorClass =
+    "border-red-600 focus-visible:border-red-600"; // ramka w tym samym kolorze
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Twoje dane</CardTitle>
+        <CardTitle> </CardTitle>
       </CardHeader>
+
       <CardContent className="grid gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="firstName">Imię *</Label>
-          <Input id="firstName" {...register("firstName" as any)} autoComplete="given-name" />
-          <ErrorSlot message={(errors as any)?.firstName?.message} />
+          <Label htmlFor="firstName" className="flex items-center">
+           <RequiredStar /> <span className="ml-1">Imię </span>
+          </Label>
+
+          <Input
+            id="firstName"
+            autoComplete="given-name"
+            className={[inputBase, firstNameError ? errorClass : ""].join(" ")}
+            aria-invalid={!!firstNameError}
+            aria-describedby={firstNameError ? "firstName-error" : undefined}
+            {...register("firstName" as any)}
+          />
+
+          <div id="firstName-error">
+            <ErrorSlot message={firstNameError} />
+          </div>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="lastName">Nazwisko *</Label>
-          <Input id="lastName" {...register("lastName" as any)} autoComplete="family-name" />
-          <ErrorSlot message={(errors as any)?.lastName?.message} />
+          <Label htmlFor="lastName" className="flex items-center">
+            <RequiredStar /> <span className="ml-1">Nazwisko</span>
+          </Label>
+
+          <Input
+            id="lastName"
+            autoComplete="family-name"
+            className={[inputBase, lastNameError ? errorClass : ""].join(" ")}
+            aria-invalid={!!lastNameError}
+            aria-describedby={lastNameError ? "lastName-error" : undefined}
+            {...register("lastName" as any)}
+          />
+
+          <div id="lastName-error">
+            <ErrorSlot message={lastNameError} />
+          </div>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="phone">Telefon *</Label>
-          <Input id="phone" {...register("phone" as any)} inputMode="tel" autoComplete="tel" />
-          <ErrorSlot message={(errors as any)?.phone?.message} />
+          <Label htmlFor="phone" className="flex items-center">
+            <RequiredStar /> <span className="ml-1">Telefon</span>
+          </Label>
+
+          <Input
+            id="phone"
+            inputMode="tel"
+            autoComplete="tel"
+            className={[inputBase, phoneError ? errorClass : ""].join(" ")}
+            aria-invalid={!!phoneError}
+            aria-describedby={phoneError ? "phone-error" : undefined}
+            {...register("phone" as any)}
+          />
+
+          <div id="phone-error">
+            <ErrorSlot message={phoneError} />
+          </div>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="email">Email *</Label>
-          <Input id="email" {...register("email" as any)} type="email" autoComplete="email" />
-          <ErrorSlot message={(errors as any)?.email?.message} />
+          <Label htmlFor="email" className="flex items-center">
+            <RequiredStar /> <span className="ml-1">Email</span>
+          </Label>
+
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            className={[inputBase, emailError ? errorClass : ""].join(" ")}
+            aria-invalid={!!emailError}
+            aria-describedby={emailError ? "email-error" : undefined}
+            {...register("email" as any)}
+          />
+
+          <div id="email-error">
+            <ErrorSlot message={emailError} />
+          </div>
         </div>
 
         <div className="grid gap-2">
           <Label htmlFor="notes">Uwagi (opcjonalnie)</Label>
-          <Textarea id="notes" {...register("notes" as any)} rows={4} />
-          <ErrorSlot message={(errors as any)?.notes?.message} />
+
+          <Textarea
+            id="notes"
+            rows={4}
+            className={[inputBase, notesError ? errorClass : ""].join(" ")}
+            aria-invalid={!!notesError}
+            aria-describedby={notesError ? "notes-error" : undefined}
+            {...register("notes" as any)}
+          />
+
+          <div id="notes-error">
+            <ErrorSlot message={notesError} />
+          </div>
         </div>
       </CardContent>
     </Card>
