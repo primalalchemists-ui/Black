@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ReservationNav } from "@/components/reservations/ReservationNav";
+import Script from "next/script";
+
+const AccessibilityPanelScript = <Script
+          id="wcag-dock"
+          strategy="afterInteractive"
+          src="//wcag.dock.codes/accessibility/Xpt4XX6zd4GJyeDOF04f/start.js"
+        />
 
 export default function RezerwacjeLayout({ children }: { children: ReactNode }) {
   return (
@@ -16,7 +23,7 @@ export default function RezerwacjeLayout({ children }: { children: ReactNode }) 
 
       <Separator />
 
-      <div>{children}</div>
+      <div>{children}{AccessibilityPanelScript}</div>
     </section>
   );
 }

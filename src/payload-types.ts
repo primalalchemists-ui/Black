@@ -329,7 +329,7 @@ export interface Reservation {
     firstName: string;
     lastName: string;
     phone: string;
-    email: string;
+    email?: string | null;
   };
   notes?: string | null;
   /**
@@ -1042,6 +1042,14 @@ export interface ReservationSetting {
      */
     disabledMessage?: string | null;
     availableTablesCount: number;
+    /**
+     * Ile minut WSTECZ liczyć rezerwacje przy sprawdzaniu dostępności (np. 60).
+     */
+    arrivalWindowBeforeMinutes?: number | null;
+    /**
+     * Ile minut WPRZÓD liczyć rezerwacje przy sprawdzaniu dostępności (np. 0 albo 30).
+     */
+    arrivalWindowAfterMinutes?: number | null;
     depositAmount?: number | null;
     depositFromTablesCount?: number | null;
     reservationStartAfterOpeningMinutes?: number | null;
@@ -1071,6 +1079,10 @@ export interface ReservationSetting {
    * Plik PDF z regulaminem. Będzie dostępny do pobrania przy rezerwacji.
    */
   regulationsPdf?: (number | null) | Media;
+  /**
+   * Plik PDF z polityką prywatności. Będzie dostępny do pobrania przy rezerwacji.
+   */
+  privacyPolicyPdf?: (number | null) | Media;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -1116,6 +1128,8 @@ export interface ReservationSettingsSelect<T extends boolean = true> {
         enabled?: T;
         disabledMessage?: T;
         availableTablesCount?: T;
+        arrivalWindowBeforeMinutes?: T;
+        arrivalWindowAfterMinutes?: T;
         depositAmount?: T;
         depositFromTablesCount?: T;
         reservationStartAfterOpeningMinutes?: T;
@@ -1140,6 +1154,7 @@ export interface ReservationSettingsSelect<T extends boolean = true> {
         latestReservationStartBeforeClosingMinutes?: T;
       };
   regulationsPdf?: T;
+  privacyPolicyPdf?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

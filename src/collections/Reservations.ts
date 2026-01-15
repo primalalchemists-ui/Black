@@ -270,7 +270,7 @@ export const Reservations: CollectionConfig = {
         { name: "firstName", label: "Imię", type: "text", required: true },
         { name: "lastName", label: "Nazwisko", type: "text", required: true },
         { name: "phone", label: "Telefon", type: "text", required: true },
-        { name: "email", label: "E-mail", type: "email", required: true },
+        { name: "email", label: "E-mail", type: "email", required: false },
       ],
     },
 

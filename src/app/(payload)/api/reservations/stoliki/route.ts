@@ -119,6 +119,27 @@ async function getOpeningHours(payload: any): Promise<OpeningHour[]> {
 type SlotOut = { time: string; remaining: number; canBook: boolean };
 
 /**
+ * Rolling-window: liczymy zajętość na slot T jako sumę rezerwacji startujących w oknie [T-before, T+after)
+ */
+function takenTablesInWindow(existingDocs: any[], slotM: number, before: number, after: number) {
+  const from = slotM - before;
+  const to = slotM + after;
+
+  let taken = 0;
+  for (const r of existingDocs || []) {
+    const hh = Number((r as any).startHour ?? NaN);
+    const mm = Number((r as any).startMinute ?? NaN);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
+
+    const startM = hh * 60 + mm;
+    if (startM >= from && startM < to) {
+      taken += Number((r as any).tablesCount) || 0;
+    }
+  }
+  return taken;
+}
+
+/**
  * GET /api/reservations/stoliki?date=YYYY-MM-DD&partySize=2
  */
 export async function GET(req: Request) {
@@ -144,6 +165,9 @@ export async function GET(req: Request) {
   const latestBeforeClose = Number(t?.latestReservationStartBeforeClosingMinutes ?? 0);
   const afterOpen = Number(t?.reservationStartAfterOpeningMinutes ?? 0);
 
+  const windowBefore = Number(t?.arrivalWindowBeforeMinutes ?? 60);
+  const windowAfter = Number(t?.arrivalWindowAfterMinutes ?? 0);
+
   const openingHours = await getOpeningHours(payload);
 
   const slots = openingHours.length
@@ -168,8 +192,6 @@ export async function GET(req: Request) {
         return out;
       })();
 
-  // ✅ BLOKOWANIE "od startu do końca dnia":
-  // remaining(slot) = available - suma(rezerwacji start <= slot)  dla statusów new/confirmed
   const dayISO = dayISOFromDateOnly(date);
 
   const existing = await payload.find({
@@ -184,35 +206,17 @@ export async function GET(req: Request) {
     },
   });
 
-  const startBuckets = new Map<number, number>();
-  for (const r of existing?.docs || []) {
-    const hh = Number((r as any).startHour ?? NaN);
-    const mm = Number((r as any).startMinute ?? NaN);
-    if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
-    const startM = hh * 60 + mm;
-    const prev = startBuckets.get(startM) || 0;
-    startBuckets.set(startM, prev + (Number((r as any).tablesCount) || 0));
-  }
-
-  const startsSorted = Array.from(startBuckets.entries()).sort((a, b) => a[0] - b[0]);
-
   const isToday = isTodayLocal(date);
   const nowM = minutesFromHHMM(nowHHMM());
 
   const out: SlotOut[] = [];
-  let runningTaken = 0;
-  let idx = 0;
 
   for (const time of slots) {
     const slotM = minutesFromHHMM(time);
 
-    // prefix: dodaj wszystkie rezerwacje startujące <= slot
-    while (idx < startsSorted.length && startsSorted[idx][0] <= slotM) {
-      runningTaken += startsSorted[idx][1];
-      idx++;
-    }
-
-    const remaining = Math.max(0, availableTablesCount - runningTaken);
+    // rolling window zamiast prefix-sum
+    const taken = takenTablesInWindow(existing?.docs || [], slotM, windowBefore, windowAfter);
+    const remaining = Math.max(0, availableTablesCount - taken);
 
     // ✅ nie pokazuj jako dostępne godzin, które już minęły dziś
     const timePassed = isToday ? slotM <= nowM : false;
@@ -229,6 +233,10 @@ export async function GET(req: Request) {
     availableTablesCount,
     tablesNeeded,
     slots: out,
+    policy: {
+      arrivalWindowBeforeMinutes: windowBefore,
+      arrivalWindowAfterMinutes: windowAfter,
+    },
   });
 }
 
@@ -274,6 +282,9 @@ export async function POST(req: Request) {
         { status: 409 }
       );
     }
+
+    const windowBefore = Number(t?.arrivalWindowBeforeMinutes ?? 60);
+    const windowAfter = Number(t?.arrivalWindowAfterMinutes ?? 0);
 
     const dateOnly = String((data as any).date || "");
     const time = String((data as any).hour || "");
@@ -323,7 +334,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ✅ sprawdzamy dostępność "od startu do końca dnia" dla wybranego slotu
     const dayISO = dayISOFromDateOnly(dateOnly);
 
     const existing = await payload.find({
@@ -339,19 +349,11 @@ export async function POST(req: Request) {
     });
 
     const slotM = minutesFromHHMM(time);
-    let takenUpToSlot = 0;
 
-    for (const r of existing?.docs || []) {
-      const hh = Number((r as any).startHour ?? NaN);
-      const mm = Number((r as any).startMinute ?? NaN);
-      if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
-      const startM = hh * 60 + mm;
+    // ✅ rolling window zamiast "od startu do końca dnia"
+    const taken = takenTablesInWindow(existing?.docs || [], slotM, windowBefore, windowAfter);
+    const remaining = Math.max(0, available - taken);
 
-      // prefix: start <= slot
-      if (startM <= slotM) takenUpToSlot += (Number((r as any).tablesCount) || 0);
-    }
-
-    const remaining = Math.max(0, available - takenUpToSlot);
     if (requestedTables > remaining) {
       return NextResponse.json(
         { error: "NO_AVAILABILITY", issues: [issue(["tablesCount"], "Brak dostępnych stolików na wybrany termin.")] },
@@ -364,7 +366,7 @@ export async function POST(req: Request) {
     const startHour = String(h);
     const startMinute = String(m);
 
-    // endsAt tylko informacyjnie (+60)
+    // startsAt/endsAt pomocniczo (+60). Uwaga: to używa TZ serwera.
     const startsAt = new Date(dateOnly + "T" + time + ":00");
     const endsAt = new Date(startsAt);
     endsAt.setMinutes(endsAt.getMinutes() + 60);
@@ -410,7 +412,11 @@ export async function POST(req: Request) {
   } catch (e: any) {
     console.error("[/api/reservations/stoliki] POST error:", e);
     return NextResponse.json(
-      { error: "INTERNAL_ERROR", message: e?.message ?? String(e), stack: process.env.NODE_ENV === "development" ? e?.stack : undefined },
+      {
+        error: "INTERNAL_ERROR",
+        message: e?.message ?? String(e),
+        stack: process.env.NODE_ENV === "development" ? e?.stack : undefined,
+      },
       { status: 500 }
     );
   }

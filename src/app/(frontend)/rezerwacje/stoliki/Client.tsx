@@ -355,14 +355,14 @@ export default function RezerwacjeStolikiPage() {
 
               <CustomerFields register={form.register} errors={form.formState.errors} />
 
-              <Card>
+              {/* <Card>
                 <CardHeader>
                   <CardTitle>Faktura</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <InvoiceFields control={form.control as any} trigger={form.trigger as any} errors={form.formState.errors as any} />
                 </CardContent>
-              </Card>
+              </Card> */}
 
               <AcceptRulesCard control={form.control as any} trigger={form.trigger as any} errors={form.formState.errors as any} />
 
