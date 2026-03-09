@@ -11,13 +11,17 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
   const year = new Date().getFullYear()
 
   return (
-    <footer className="w-full bg-background">
-      <div className="max-w-[1200px] mx-auto flex w-full  items-center justify-between gap-4 px-4 py-6 md:px-0">
-        <div className="flex items-center justify-between w-36">
+    <footer className="w-full bg-background border-t">
+      <div className="max-w-[1200px] mx-auto flex flex-col gap-6 px-4 py-6 md:px-0 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4">
           <div className="text-sm text-muted-foreground">
-          © {year} <span className="font-black">{settings?.name ?? "Centrum Spotkań Black"}</span>
-        </div>
-         <a
+            © {year}{" "}
+            <span className="font-black">
+              {settings?.name ?? "Centrum Spotkań Black"}
+            </span>
+          </div>
+
+          <a
             href="#header"
             aria-label="Wróć na górę strony"
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border bg-background transition hover:bg-muted"
@@ -30,18 +34,34 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               className="h-5 w-5"
             />
           </a>
-
         </div>
 
-        <a
-          href="/api/privacy-policy"
-          target="_blank"
-          rel="noreferrer"
-          className="text-sm text-muted-foreground underline hover:text-foreground"
-        >
-          Polityka prywatności
-        </a>
+        <div className="flex flex-col gap-3 text-sm md:flex-row md:items-center md:gap-6">
+          <a
+            href="/dofinansowanie"
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            Dofinansowanie
+          </a>
 
+          <a
+            href="/api/privacy-policy"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            Polityka prywatności
+          </a>
+
+          <a
+            href="/api/regulamin"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-muted-foreground underline hover:text-foreground"
+          >
+            Regulamin
+          </a>
+        </div>
 
         <div className="flex items-center gap-3">
           {settings?.facebook ? (

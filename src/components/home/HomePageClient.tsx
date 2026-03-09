@@ -9,6 +9,7 @@ import EventSection from "@/components/home/sections/EventSection"
 import OfferSection from "@/components/home/sections/OfferSection"
 import ContactSection from "@/components/home/sections/ContactSection"
 import PlaceInfoSection from "@/components/home/sections/PlaceInfoSection"
+import { HomeFundingLogo } from "./components/HomeFundingLogo"
 
 export default function HomePageClient({ settings }: { settings: SiteSettings }) {
   const [heroApi, setHeroApi] = React.useState<CarouselApi>()
@@ -40,6 +41,7 @@ export default function HomePageClient({ settings }: { settings: SiteSettings })
         {/* ✅ 2 osobne karty */}
         <ContactSection settings={settings} />
         <PlaceInfoSection settings={settings} />
+        <HomeFundingLogo />
       </div>
     </div>
   )

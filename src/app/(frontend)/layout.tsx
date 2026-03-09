@@ -13,6 +13,8 @@ import { getSiteSettings } from "@/lib/siteSettings"
 export const metadata: Metadata = {
   title: "Centrum Spotkań Black",
   description: "Jedzenie. Rozrywka. Wspólne chwile.",
+
+  
 }
 
 export default async function FrontendLayout({ children }: { children: ReactNode }) {
@@ -37,8 +39,7 @@ export default async function FrontendLayout({ children }: { children: ReactNode
           </main>
         </div>
 
-        <Separator className="shadow-[0_8px_24px_-10px_rgba(0,0,0,0.25)]" />
-
+        {/* <Separator className="shadow-[0_8px_24px_-10px_rgba(0,0,0,0.25)]" /> */}
         <Footer settings={settings} />
       </body>
     </html>
