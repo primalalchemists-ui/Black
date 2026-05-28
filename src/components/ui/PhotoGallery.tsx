@@ -66,9 +66,13 @@ function GalleryImage({
 function LightboxImage({ src, alt }: { src: string; alt: string }) {
   const reduceMotion = useReducedMotion()
   const [loaded, setLoaded] = React.useState(false)
+  const imgRef = React.useRef<HTMLImageElement>(null)
 
   React.useEffect(() => {
     setLoaded(false)
+    if (imgRef.current?.complete) {
+      setLoaded(true)
+    }
   }, [src])
 
   return (
@@ -77,6 +81,7 @@ function LightboxImage({ src, alt }: { src: string; alt: string }) {
         <div className="absolute h-16 w-16 animate-spin rounded-full border-4 border-white/20 border-t-white/70" />
       )}
       <motion.img
+        ref={imgRef}
         key={src}
         src={src}
         alt={alt}
