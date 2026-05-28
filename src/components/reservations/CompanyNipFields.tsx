@@ -61,22 +61,12 @@ export function CompanyNipFields<T extends FieldValues>({
               {/* Label jako tekst (semantyka przez aria-labelledby) */}
               <span
                 id={labelId}
-                className="text-sm font-medium leading-none"
+                className="cursor-pointer text-sm font-medium leading-none select-none"
                 onClick={() => {
                   const next = !Boolean(field.value)
                   field.onChange(next)
                   trigger("nip" as any)
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    const next = !Boolean(field.value)
-                    field.onChange(next)
-                    trigger("nip" as any)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
               >
                 {companyLabel}
               </span>

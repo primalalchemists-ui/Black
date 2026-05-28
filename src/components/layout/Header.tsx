@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
 
+import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
@@ -62,8 +63,8 @@ export default function Header() {
         <div className="md:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" aria-label="Otwórz menu">
-                Menu
+              <Button variant="outline" size="icon" aria-label="Otwórz menu">
+                <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
 

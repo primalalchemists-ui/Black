@@ -44,7 +44,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
           <div className="flex flex-col gap-3 text-sm md:flex-row md:items-center md:gap-6">
             <a
               href="/dofinansowanie"
-              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))]"
+              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Dofinansowanie
             </a>
@@ -53,7 +53,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               href="/api/privacy-policy"
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))]"
+              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Polityka prywatności
             </a>
@@ -62,7 +62,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               href="/api/regulamin"
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))]"
+              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Regulamin
             </a>

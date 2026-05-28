@@ -67,22 +67,12 @@ export function AcceptRulesCard({
               <div className="grid gap-1 leading-none">
                 <span
                   id={labelId}
-                  className="text-sm font-medium leading-none"
+                  className="cursor-pointer text-sm font-medium leading-none select-none"
                   onClick={() => {
                     const next = !Boolean(field.value)
                     field.onChange(next)
                     trigger(name as any)
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      const next = !Boolean(field.value)
-                      field.onChange(next)
-                      trigger(name as any)
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
                 >
                  <span
                   aria-hidden="true"

@@ -97,18 +97,19 @@ function ActivityCard({
   ctaLabel,
 }: ActivityCardProps) {
   return (
-    <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)] md:aspect-[16/7]">
-      {/* Full-bleed photo */}
-      <FadeInImage
-        src={photo}
-        alt={alt}
-        className="absolute inset-0 h-full w-full object-cover"
-        loading="lazy"
-      />
-
+    <div className="flex flex-col overflow-hidden rounded-[14px] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)]">
+      {/* Photo - własny aspect ratio, nie wchodzi pod bar */}
+      <div className="relative aspect-[4/3] md:aspect-[16/7] overflow-hidden">
+        <FadeInImage
+          src={photo}
+          alt={alt}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+        />
+      </div>
 
       {/* Bottom bar */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-black/50 px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-3 bg-neutral-600 px-4 py-3">
         <AnimatePresence mode="wait" initial={false}>
           {loading ? (
             <MotionWrap k={`${title}-loading`} className="flex w-full items-center justify-between gap-3">
@@ -237,7 +238,7 @@ export default function RozrywkaPage() {
       {/* Bilard + Kręgle */}
       <div className="grid gap-4 md:grid-cols-2">
         <ActivityCard
-          photo="/images/20260503_184125.jpg"
+          photo="/images/zdjecia/lokal/5.webp"
           alt="Bilard w Centrum Spotkań Black"
           title="Bilard"
           loading={loadingSettings}
@@ -249,7 +250,7 @@ export default function RozrywkaPage() {
           ctaLabel="Rezerwuj bilard"
         />
         <ActivityCard
-          photo="/images/20260524_160458.jpg"
+          photo="/images/zdjecia/lokal/8.webp"
           alt="Kręgle w Centrum Spotkań Black"
           title="Kręgle"
           loading={loadingSettings}

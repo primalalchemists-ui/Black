@@ -15,7 +15,7 @@ export default function PlaceInfoSection({ settings }: { settings: SiteSettings 
   if (!hasDescription && !hasHours) return null
 
   return (
-    <section aria-labelledby="place-info-title" className="mx-auto mb-8 w-full px-4 md:px-0">
+    <section aria-labelledby="place-info-title" className="mx-auto w-full px-4 md:px-0">
       {/* nagłówek z akcentem */}
       <div className="mb-8 flex items-center gap-4">
         <h2 id="place-info-title" className="text-2xl font-semibold">

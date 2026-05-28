@@ -19,6 +19,7 @@ import { ReservationStepper } from "@/components/reservations/ReservationStepper
 import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
 import { ErrorSlot } from "@/components/forms/ErrorSlot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarDays } from "lucide-react";
 
 import { businessRequestSchema, type BusinessRequest } from "@/lib/validation/reservations";
 import { fetchEventsByKind, getEventDisplayDateTimePL, renderPricePLN, type CmsEvent } from "@/lib/cms/events";
@@ -230,8 +231,12 @@ export default function RezerwacjeBiznesPage() {
               className="grid gap-4"
             >
               {!hasBusinessEvents ? (
-                <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                  Brak wydarzeń biznesowych.
+                <div className="flex flex-col items-center justify-center py-12 text-center" role="status" aria-live="polite">
+                  <CalendarDays aria-hidden="true" className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                  <p className="font-medium text-foreground">Brak nadchodzących wydarzeń</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Sprawdź ponownie wkrótce lub wyślij zapytanie w zakładce Biznes.
+                  </p>
                 </div>
               ) : (
                 <>

@@ -25,7 +25,7 @@ export function ReservationNav() {
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-150 ${
+            className={`inline-flex min-h-[44px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
               active
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "bg-muted text-foreground hover:bg-[hsl(var(--brand-soft))] hover:text-[hsl(var(--brand-foreground))]"

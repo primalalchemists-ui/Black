@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import VideoGallery from "@/components/ui/VideoGallery";
+
+const VIDEOS = [1, 2, 3, 4, 5].map((n) => ({
+  src: `/images/zdjecia/jedzenie/filmy/${n}-film.webm`,
+  label: `Film ${n}`,
+}));
 
 type MenuCategory = {
   id: string;
@@ -241,15 +247,19 @@ export default function RestauracjaPage() {
 
   return (
     <div className="grid gap-10 px-4 py-6 md:py-0 md:px-0">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Restauracja</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Smaczne jedzenie w dobrym towarzystwie</p>
+      {/* Header + Filmy */}
+      <div className="grid gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Restauracja</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Smaczne jedzenie w dobrym towarzystwie</p>
+          </div>
+          <Button asChild className="shrink-0 mt-1 md:hidden">
+            <Link href="/rezerwacje/stoliki">Rezerwuj stolik</Link>
+          </Button>
         </div>
-        <Button asChild className="shrink-0 mt-1 md:hidden">
-          <Link href="/rezerwacje/stoliki">Rezerwuj stolik</Link>
-        </Button>
+
+        <VideoGallery videos={VIDEOS} title="" titleId="restauracja-videos-title" />
       </div>
 
       {/* Error */}

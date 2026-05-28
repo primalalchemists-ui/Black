@@ -283,7 +283,7 @@ export default function RezerwacjeBiznesPage() {
     <div className="grid gap-8 px-4 py-4 md:px-0">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Biznes & Eventy</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Biznes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Konferencje, szkolenia, integracje firmowe i więcej.
         </p>

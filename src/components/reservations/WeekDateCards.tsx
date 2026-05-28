@@ -39,7 +39,8 @@ export function WeekDateCards({ value, onChange, days = 7 }: Props) {
             key={iso}
             type="button"
             onClick={() => onChange(iso)}
-            className="text-left"
+            aria-label={`Wybierz dzień ${label}${active ? " (wybrany)" : ""}`}
+            className="text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <Card
               className={[

@@ -48,15 +48,19 @@ export default function DotNav({ api, label, className }: DotNavProps) {
           aria-label={`Przejdź do slajdu ${i + 1}`}
           aria-selected={selectedIndex === i}
           aria-current={selectedIndex === i ? "true" : undefined}
-          className={[
-            "h-2.5 w-2.5 rounded-full border transition",
-            selectedIndex === i
-              ? "bg-foreground border-foreground"
-              : "bg-transparent border-muted-foreground/40",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          ].join(" ")}
+          className="flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={() => api.scrollTo(i)}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className={[
+              "h-2.5 w-2.5 rounded-full border transition",
+              selectedIndex === i
+                ? "bg-foreground border-foreground"
+                : "bg-transparent border-muted-foreground/40",
+            ].join(" ")}
+          />
+        </button>
       ))}
     </div>
   )

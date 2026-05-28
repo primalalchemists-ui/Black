@@ -8,7 +8,6 @@ import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carouse
 
 type Photo = { src: string; alt: string }
 
-/** Zdjęcie z skeleton + fade-in, spójne z FadeInImage */
 function GalleryImage({
   src,
   alt,
@@ -24,16 +23,11 @@ function GalleryImage({
 
   React.useEffect(() => {
     setLoaded(false)
-    // Obrazki SSR-owane ładują się przed hydracją React → onLoad nigdy nie strzela.
-    // Sprawdzamy complete po mountzie żeby obsłużyć ten przypadek.
-    if (imgRef.current?.complete) {
-      setLoaded(true)
-    }
+    if (imgRef.current?.complete) setLoaded(true)
   }, [src])
 
   return (
     <div className="relative h-full w-full">
-      {/* skeleton */}
       <AnimatePresence>
         {!loaded && (
           <motion.div
@@ -44,8 +38,6 @@ function GalleryImage({
           />
         )}
       </AnimatePresence>
-
-      {/* zdjęcie */}
       <motion.img
         ref={imgRef}
         src={src}
@@ -62,7 +54,6 @@ function GalleryImage({
   )
 }
 
-/** Zdjęcie w lightboxie — fade przy zmianie */
 function LightboxImage({ src, alt }: { src: string; alt: string }) {
   const reduceMotion = useReducedMotion()
   const [loaded, setLoaded] = React.useState(false)
@@ -70,9 +61,7 @@ function LightboxImage({ src, alt }: { src: string; alt: string }) {
 
   React.useEffect(() => {
     setLoaded(false)
-    if (imgRef.current?.complete) {
-      setLoaded(true)
-    }
+    if (imgRef.current?.complete) setLoaded(true)
   }, [src])
 
   return (
@@ -89,7 +78,7 @@ function LightboxImage({ src, alt }: { src: string; alt: string }) {
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.97 }}
         animate={{ opacity: loaded ? 1 : 0, scale: 1 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.3, ease: "easeOut" }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
       />
@@ -108,16 +97,20 @@ function Lightbox({
 }) {
   const reduceMotion = useReducedMotion()
   const [idx, setIdx] = React.useState(startIndex)
-  const touchStartX = React.useRef<number | null>(null)
+  const [dragX, setDragX] = React.useState(0)
 
-  const prev = React.useCallback(
-    () => setIdx((i) => (i - 1 + photos.length) % photos.length),
-    [photos.length],
-  )
-  const next = React.useCallback(
-    () => setIdx((i) => (i + 1) % photos.length),
-    [photos.length],
-  )
+  const touchRef = React.useRef<{ x: number; y: number; t: number } | null>(null)
+  const lockAxis = React.useRef<"h" | "v" | null>(null)
+
+  const prev = React.useCallback(() => {
+    setDragX(0)
+    setIdx((i) => (i - 1 + photos.length) % photos.length)
+  }, [photos.length])
+
+  const next = React.useCallback(() => {
+    setDragX(0)
+    setIdx((i) => (i + 1) % photos.length)
+  }, [photos.length])
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -135,34 +128,58 @@ function Lightbox({
   }, [])
 
   function handleTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0].clientX
+    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() }
+    lockAxis.current = null
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!touchRef.current) return
+    const dx = e.touches[0].clientX - touchRef.current.x
+    const dy = e.touches[0].clientY - touchRef.current.y
+
+    if (lockAxis.current === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      lockAxis.current = Math.abs(dx) >= Math.abs(dy) ? "h" : "v"
+    }
+
+    if (lockAxis.current === "h") {
+      setDragX(dx)
+    }
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
-    if (touchStartX.current === null) return
-    const diff = touchStartX.current - e.changedTouches[0].clientX
-    if (Math.abs(diff) > 50) {
-      diff > 0 ? next() : prev()
+    if (!touchRef.current) return
+    const dx = e.changedTouches[0].clientX - touchRef.current.x
+    const dt = Math.max(1, Date.now() - touchRef.current.t)
+    const velocity = Math.abs(dx) / dt
+
+    if (lockAxis.current === "h" && (Math.abs(dx) > 60 || velocity > 0.3)) {
+      dx < 0 ? next() : prev()
+    } else {
+      setDragX(0)
     }
-    touchStartX.current = null
+
+    touchRef.current = null
+    lockAxis.current = null
   }
 
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+      style={{ touchAction: "none" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
       onClick={onClose}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       role="dialog"
       aria-modal="true"
       aria-label="Podgląd zdjęcia"
     >
       <button
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-2 text-white transition hover:bg-white/30"
+        className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/30"
         onClick={onClose}
         aria-label="Zamknij"
       >
@@ -177,9 +194,20 @@ function Lightbox({
         <ChevronLeft className="h-7 w-7" />
       </button>
 
-      <AnimatePresence mode="wait">
-        <LightboxImage key={idx} src={photos[idx].src} alt={photos[idx].alt} />
-      </AnimatePresence>
+      {/* Wrapper z wizualnym przesunięciem podczas dragu */}
+      <motion.div
+        className="flex items-center justify-center"
+        animate={{ x: dragX }}
+        transition={
+          dragX === 0
+            ? { type: "spring", stiffness: 400, damping: 40 }
+            : { duration: 0 }
+        }
+      >
+        <AnimatePresence mode="wait">
+          <LightboxImage key={idx} src={photos[idx].src} alt={photos[idx].alt} />
+        </AnimatePresence>
+      </motion.div>
 
       <button
         className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white shadow-lg transition hover:bg-white/40 active:scale-95"

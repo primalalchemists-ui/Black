@@ -43,7 +43,7 @@ export function CustomerFields<T extends Record<string, any>>({
   return (
     <Card>
       <CardHeader>
-        <CardTitle> </CardTitle>
+        <CardTitle>Dane kontaktowe</CardTitle>
       </CardHeader>
 
       <CardContent className="grid gap-4">

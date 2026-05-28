@@ -21,6 +21,8 @@ export default function RezerwacjeLayout({ children }: { children: ReactNode }) 
 
       <ReservationNav />
 
+      <Separator />
+
       <div>{children}{AccessibilityPanelScript}</div>
     </section>
   );

@@ -1,5 +1,5 @@
 import PhotoGallery from "@/components/ui/PhotoGallery"
-import { GALLERY_PHOTOS } from "@/lib/galleryPhotos"
+import { GALLERY_PHOTOS_IMPREZY } from "@/lib/galleryPhotos"
 import config from "@payload-config"
 import { getPayload } from "payload"
 import { Phone, Users, Target, Wine } from "lucide-react"
@@ -81,7 +81,7 @@ export default async function ImprezyPage() {
         ) : null}
       </div>
 
-      <PhotoGallery photos={GALLERY_PHOTOS} title="Galeria" titleId="imprezy-gallery-title" />
+      <PhotoGallery photos={GALLERY_PHOTOS_IMPREZY} title="Galeria" titleId="imprezy-gallery-title" />
     </div>
   )
 }
