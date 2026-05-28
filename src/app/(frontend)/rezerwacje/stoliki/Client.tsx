@@ -288,7 +288,7 @@ export default function RezerwacjeStolikiPage() {
                   />
                 </div>
 
-                <div className="rounded-lg border p-4">
+                <div className="rounded-xl border p-4">
                   <div className="text-sm text-muted-foreground">Podsumowanie</div>
                   <div className="grid gap-1">
                     <div className="font-medium">Stoliki: {tablesNeeded}</div>
@@ -299,7 +299,7 @@ export default function RezerwacjeStolikiPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    className="bg-black text-white hover:bg-black/90"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
                     disabled={!gatedCanGoStep2}
                     onClick={() => setStep(2)}
                   >
@@ -343,7 +343,7 @@ export default function RezerwacjeStolikiPage() {
             </CardHeader>
 
             <CardContent className="grid gap-6">
-              <div className="rounded-lg border p-4">
+              <div className="rounded-xl border p-4">
                 <div className="text-sm text-muted-foreground">Podsumowanie</div>
                 <div className="font-medium">
                   Stoliki • {day} • {hour} • Osób: {Math.min(12, Math.max(1, partySizeNumber || 1))} • Stoliki: {tablesNeeded}
@@ -381,7 +381,7 @@ export default function RezerwacjeStolikiPage() {
                   Wróć
                 </Button>
 
-                <Button type="submit" className="bg-black text-white hover:bg-black/90" disabled={form.formState.isSubmitting}>
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Wysyłam..." : "Wyślij rezerwację"}
                 </Button>
               </div>
@@ -399,7 +399,7 @@ export default function RezerwacjeStolikiPage() {
             <p className="text-muted-foreground">Rezerwacja została wysłana.</p>
 
             <Button
-              className="bg-black text-white hover:bg-black/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={async () => {
                 setStep(1);
                 await reloadAvailability(day, partySizeForApi, hour);

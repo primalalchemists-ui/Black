@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type MenuCategory = {
   id: string;
@@ -16,8 +15,8 @@ type MenuCategory = {
 type Promo = {
   enabled?: boolean;
   promoPrice?: number | null;
-  startsAt?: string | null; // ISO
-  endsAt?: string | null; // ISO
+  startsAt?: string | null;
+  endsAt?: string | null;
 };
 
 type MenuItem = {
@@ -108,9 +107,9 @@ function MotionWrap({
 function DishSkeleton() {
   return (
     <div className="grid gap-3">
-      <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
-      <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
-      <div className="h-4 w-1/3 rounded bg-muted animate-pulse" />
+      <div className="h-5 w-2/3 rounded-md bg-amber-200/60 animate-pulse" />
+      <div className="h-4 w-1/2 rounded-md bg-amber-200/40 animate-pulse" />
+      <div className="h-5 w-1/4 rounded-md bg-amber-200/60 animate-pulse mt-1" />
     </div>
   );
 }
@@ -119,7 +118,7 @@ function CategoriesSkeleton() {
   return (
     <div className="flex flex-wrap gap-2">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-9 w-28 rounded-md bg-muted animate-pulse" />
+        <div key={i} className="h-8 w-24 rounded-full bg-muted animate-pulse" />
       ))}
     </div>
   );
@@ -127,18 +126,14 @@ function CategoriesSkeleton() {
 
 function MenuSkeleton() {
   return (
-    <div className="grid gap-3">
+    <div className="divide-y divide-border/50">
       {Array.from({ length: 7 }).map((_, i) => (
-        <div
-          key={i}
-          className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-b pb-3 last:border-b-0 last:pb-0"
-        >
-          <div className="h-4 w-6 rounded bg-muted animate-pulse" />
-          <div className="grid gap-2">
+        <div key={i} className="flex items-start justify-between gap-4 px-6 py-4">
+          <div className="flex-1 grid gap-2">
             <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
             <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
           </div>
-          <div className="h-4 w-14 rounded bg-muted animate-pulse justify-self-end" />
+          <div className="h-4 w-14 rounded bg-muted animate-pulse shrink-0" />
         </div>
       ))}
     </div>
@@ -245,75 +240,76 @@ export default function RestauracjaPage() {
   }, [dishOfDay]);
 
   return (
-    <div className="grid gap-8 px-4 py-6 md:py-0 md:px-0">
-      <div className="flex justify-between">
-        <h1 className="text-3xl font-semibold">Restauracja</h1>
-        <Button asChild className="md:mt-3 mr-4">
+    <div className="grid gap-10 px-4 py-6 md:py-0 md:px-0">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Restauracja</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Smaczne jedzenie w dobrym towarzystwie</p>
+        </div>
+        <Button asChild className="shrink-0 mt-1 md:hidden">
           <Link href="/rezerwacje/stoliki">Rezerwuj stolik</Link>
         </Button>
       </div>
 
-      {error ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-red-600">{error}</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Sprawdź czy Payload działa pod <code>/api</code> oraz czy kolekcje mają poprawne slugi.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-      {/* TOP: Danie dnia */}
-      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
-        <Card>
-          <CardHeader>
-            <CardTitle>Danie dnia</CardTitle>
-          </CardHeader>
-
-          <CardContent className="grid gap-2">
-            <AnimatePresence mode="wait" initial={false}>
-              {loading ? (
-                <MotionWrap k="dish-loading">
-                  <DishSkeleton />
-                </MotionWrap>
-              ) : dish ? (
-                <MotionWrap k="dish-ready">
-                  <>
-                    <div className="font-medium">{dish.title}</div>
-                    {dish.desc ? <p className="text-sm text-muted-foreground">{dish.desc}</p> : null}
-
-                    {typeof dish.basePrice === "number" ? (
-                      <div className="pt-2 text-sm font-semibold">
-                        {dish.promoActive && typeof dish.promoPrice === "number" ? (
-                          <span className="flex items-center gap-2">
-                            <span className="text-muted-foreground line-through">{formatPLN(dish.basePrice)}</span>
-                            <span>{formatPLN(dish.promoPrice)}</span>
-                          </span>
-                        ) : (
-                          <span>{formatPLN(dish.basePrice)}</span>
-                        )}
-                      </div>
+      {/* Danie dnia */}
+      <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--brand)/0.35)] bg-card px-6 py-5">
+        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-amber-100/60 pointer-events-none" />
+        <div className="absolute -right-4 bottom-0 h-20 w-20 rounded-full bg-amber-200/30 pointer-events-none" />
+        <div className="relative">
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--brand-soft))] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[hsl(var(--brand-foreground))]">
+            ✦ Polecamy dzisiaj
+          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            {loading ? (
+              <MotionWrap k="dish-loading">
+                <DishSkeleton />
+              </MotionWrap>
+            ) : dish ? (
+              <MotionWrap k="dish-ready">
+                <div className="text-lg font-semibold leading-snug">{dish.title}</div>
+                {dish.desc ? (
+                  <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{dish.desc}</p>
+                ) : null}
+                {typeof dish.basePrice === "number" ? (
+                  <div className="mt-3">
+                    {dish.promoActive && typeof dish.promoPrice === "number" ? (
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground line-through">{formatPLN(dish.basePrice)}</span>
+                        <span className="text-lg font-bold text-amber-800">{formatPLN(dish.promoPrice)}</span>
+                      </span>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Nie wybrano pozycji w CMS.</p>
+                      <span className="text-lg font-bold text-amber-800">{formatPLN(dish.basePrice)}</span>
                     )}
-                  </>
-                </MotionWrap>
-              ) : (
-                <MotionWrap k="dish-empty">
-                  <p className="text-sm text-muted-foreground">Brak aktywnego dania dnia.</p>
-                </MotionWrap>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">Nie wybrano pozycji w CMS.</p>
+                )}
+              </MotionWrap>
+            ) : (
+              <MotionWrap k="dish-empty">
+                <p className="text-sm text-muted-foreground">Brak aktywnego dania dnia.</p>
+              </MotionWrap>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* MENU */}
-      <div className="grid gap-4">
-        <h2 className="text-2xl font-semibold">Menu</h2>
+      {/* Menu */}
+      <div className="grid gap-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold tracking-tight whitespace-nowrap">Menu</h2>
+          <div className="h-px flex-1 bg-border" />
+        </div>
 
-        {/* Kategorie z CMS */}
+        {/* Kategorie */}
         <AnimatePresence mode="wait" initial={false}>
           {loading ? (
             <MotionWrap k="cats-loading">
@@ -325,17 +321,20 @@ export default function RestauracjaPage() {
                 {categories.map((c) => {
                   const isActive = c.id === activeCategoryId;
                   return (
-                    <Button
+                    <button
                       key={c.id}
-                      variant={isActive ? "default" : "outline"}
-                      className="h-9"
+                      type="button"
                       onClick={() => setActiveCategoryId(c.id)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-150 ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted text-foreground hover:bg-[hsl(var(--brand-soft))] hover:text-[hsl(var(--brand-foreground))]"
+                      }`}
                     >
                       {c.name}
-                    </Button>
+                    </button>
                   );
                 })}
-
                 {categories.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Brak kategorii w CMS (albo są nieaktywne).</p>
                 ) : null}
@@ -345,81 +344,80 @@ export default function RestauracjaPage() {
         </AnimatePresence>
 
         {/* Lista pozycji */}
-        <Card>
-          <CardContent className="pt-6">
-            <AnimatePresence mode="wait" initial={false}>
-              {loading ? (
-                <MotionWrap k="menu-loading">
-                  <MenuSkeleton />
-                </MotionWrap>
-              ) : (
-                <MotionWrap k="menu-ready" className="grid gap-3">
-                  <>
-                    {filteredItems.map((item, idx) => {
-                      const { promoActive, promoPrice, basePrice } = getEffectivePrice(item);
+        <div className="rounded-2xl border bg-card overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            {loading ? (
+              <MotionWrap k="menu-loading">
+                <MenuSkeleton />
+              </MotionWrap>
+            ) : (
+              <MotionWrap k="menu-ready" className="divide-y divide-border/60">
+                <>
+                  {filteredItems.map((item) => {
+                    const { promoActive, promoPrice, basePrice } = getEffectivePrice(item);
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="grid grid-cols-[44px_1fr_auto] items-center gap-3 border-b pb-3 last:border-b-0 last:pb-0"
-                        >
-                          <div className="text-sm text-muted-foreground">{(idx + 1).toString()}.</div>
-
-                          <div>
-                            <div className="font-medium">{item.name}</div>
-                            {item.description ? (
-                              <div className="text-xs text-muted-foreground">{item.description}</div>
-                            ) : null}
-                          </div>
-
-                          <div className="text-sm font-semibold">
-                            {promoActive && typeof promoPrice === "number" ? (
-                              <span className="flex items-center gap-2">
-                                <span className="text-muted-foreground line-through">{formatPLN(basePrice)}</span>
-                                <span>{formatPLN(promoPrice)}</span>
-                              </span>
-                            ) : (
-                              <span>{formatPLN(basePrice)}</span>
-                            )}
-                          </div>
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-amber-50/50"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold leading-snug">{item.name}</div>
+                          {item.description ? (
+                            <div className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                              {item.description}
+                            </div>
+                          ) : null}
                         </div>
-                      );
-                    })}
 
-                    {/* Animacja listy przy zmianie kategorii */}
-                    <AnimatePresence mode="wait" initial={false}>
-                      {activeCategory && filteredItems.length === 0 ? (
-                        <motion.p
-                          key={`empty-${activeCategory.id}`}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.2 }}
-                          className="pt-4 text-sm text-muted-foreground"
-                        >
-                          Brak pozycji w tej kategorii.
-                        </motion.p>
-                      ) : null}
+                        <div className="shrink-0 text-sm font-semibold">
+                          {promoActive && typeof promoPrice === "number" ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-xs font-normal text-muted-foreground line-through">
+                                {formatPLN(basePrice)}
+                              </span>
+                              <span className="text-amber-800">{formatPLN(promoPrice)}</span>
+                            </div>
+                          ) : (
+                            <span>{formatPLN(basePrice)}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                      {!activeCategoryId ? (
-                        <motion.p
-                          key="pick-cat"
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.2 }}
-                          className="pt-4 text-sm text-muted-foreground"
-                        >
-                          Wybierz kategorię.
-                        </motion.p>
-                      ) : null}
-                    </AnimatePresence>
-                  </>
-                </MotionWrap>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {activeCategory && filteredItems.length === 0 ? (
+                      <motion.p
+                        key={`empty-${activeCategory.id}`}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.2 }}
+                        className="px-6 py-10 text-sm text-muted-foreground text-center"
+                      >
+                        Brak pozycji w tej kategorii.
+                      </motion.p>
+                    ) : null}
+
+                    {!activeCategoryId ? (
+                      <motion.p
+                        key="pick-cat"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.2 }}
+                        className="px-6 py-10 text-sm text-muted-foreground text-center"
+                      >
+                        Wybierz kategorię.
+                      </motion.p>
+                    ) : null}
+                  </AnimatePresence>
+                </>
+              </MotionWrap>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );

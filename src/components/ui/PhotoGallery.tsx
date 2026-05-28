@@ -108,6 +108,7 @@ function Lightbox({
 }) {
   const reduceMotion = useReducedMotion()
   const [idx, setIdx] = React.useState(startIndex)
+  const touchStartX = React.useRef<number | null>(null)
 
   const prev = React.useCallback(
     () => setIdx((i) => (i - 1 + photos.length) % photos.length),
@@ -133,6 +134,19 @@ function Lightbox({
     return () => { document.body.style.overflow = "" }
   }, [])
 
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const diff = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 50) {
+      diff > 0 ? next() : prev()
+    }
+    touchStartX.current = null
+  }
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
@@ -141,6 +155,8 @@ function Lightbox({
       exit={{ opacity: 0 }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
       onClick={onClose}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       role="dialog"
       aria-modal="true"
       aria-label="Podgląd zdjęcia"

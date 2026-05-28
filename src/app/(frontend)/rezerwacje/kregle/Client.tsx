@@ -243,7 +243,7 @@ export default function RezerwacjeKreglePage() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  className="bg-black text-white hover:bg-black/90"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
                   disabled={!canGoStep2}
                   onClick={() => setStep(2)}
                 >
@@ -269,7 +269,7 @@ export default function RezerwacjeKreglePage() {
             </CardHeader>
 
             <CardContent className="grid gap-6">
-              <div className="rounded-lg border p-4">
+              <div className="rounded-xl border p-4">
                 <div className="text-sm text-muted-foreground">Podsumowanie</div>
 
                 {grid.segments.length ? (
@@ -324,7 +324,7 @@ export default function RezerwacjeKreglePage() {
                   Wróć
                 </Button>
 
-                <Button type="submit" className="bg-black text-white hover:bg-black/90" disabled={form.formState.isSubmitting}>
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Wysyłam..." : `Rezerwuję i płacę ${formatPLN(payAmount)}`}
                 </Button>
               </div>
@@ -340,7 +340,7 @@ export default function RezerwacjeKreglePage() {
           </CardHeader>
           <CardContent className="grid gap-2">
             <p className="text-muted-foreground">Rezerwacja została wysłana.</p>
-            <Button className="bg-black text-white hover:bg-black/90" onClick={() => setStep(1)}>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setStep(1)}>
               Zrób kolejną rezerwację
             </Button>
           </CardContent>

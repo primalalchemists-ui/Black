@@ -6,9 +6,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { CarouselApi } from "@/components/ui/carousel";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import DotNav from "@/components/home/components/DotNav";
+import { FadeInImage } from "@/components/ui/FadeInImage";
 
 import { safeFetchJson } from "@/lib/cms/http";
 import { fetchEventsNotBusiness, type CmsEvent } from "@/lib/cms/events";
@@ -32,7 +32,6 @@ async function fetchResourceCounts(): Promise<ResourceCounts | null> {
   return await safeFetchJson("/api/resources/count");
 }
 
-/** Motion wrapper */
 function MotionWrap({
   k,
   children,
@@ -56,7 +55,6 @@ function MotionWrap({
   );
 }
 
-/** Skeletony z FIXED wysokością -> zero layout shift */
 function EventsSkeleton() {
   return (
     <div className="grid gap-3">
@@ -68,17 +66,78 @@ function EventsSkeleton() {
   );
 }
 
-function SettingsSkeleton() {
-  return (
-    <div className="grid gap-3">
-      <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
-      <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
-    </div>
-  );
-}
 
 function pluralPL(n: number, one: string, many: string) {
   return n === 1 ? one : many;
+}
+
+type ActivityCardProps = {
+  photo: string;
+  alt: string;
+  title: string;
+  loading: boolean;
+  enabled: boolean;
+  disabledMsg?: string;
+  price: number;
+  countLabel: string;
+  href: string;
+  ctaLabel: string;
+};
+
+function ActivityCard({
+  photo,
+  alt,
+  title,
+  loading,
+  enabled,
+  disabledMsg,
+  price,
+  countLabel,
+  href,
+  ctaLabel,
+}: ActivityCardProps) {
+  return (
+    <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.18)] md:aspect-[16/7]">
+      {/* Full-bleed photo */}
+      <FadeInImage
+        src={photo}
+        alt={alt}
+        className="absolute inset-0 h-full w-full object-cover"
+        loading="lazy"
+      />
+
+
+      {/* Bottom bar */}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-black/50 px-4 py-3 backdrop-blur-sm">
+        <AnimatePresence mode="wait" initial={false}>
+          {loading ? (
+            <MotionWrap k={`${title}-loading`} className="flex w-full items-center justify-between gap-3">
+              <div role="status" aria-live="polite" className="h-8 w-32 rounded-full bg-white/20 animate-pulse" />
+              <div className="h-6 w-28 rounded-full bg-white/10 animate-pulse" />
+            </MotionWrap>
+          ) : enabled ? (
+            <MotionWrap k={`${title}-ready`} className="flex w-full items-center justify-between gap-3">
+              <Button asChild className="bg-white text-black hover:bg-white/90">
+                <Link href={href}>{ctaLabel}</Link>
+              </Button>
+              <span className="text-xs font-medium text-white/80 shrink-0">
+                {price} zł / godz. · {countLabel}
+              </span>
+            </MotionWrap>
+          ) : (
+            <MotionWrap k={`${title}-disabled`} className="flex w-full items-center justify-between gap-3">
+              <Button size="sm" disabled aria-disabled="true" className="rounded-full">
+                {ctaLabel}
+              </Button>
+              <span className="text-xs text-white/60 shrink-0">
+                {disabledMsg || "Chwilowo wyłączone"}
+              </span>
+            </MotionWrap>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 }
 
 export default function RozrywkaPage() {
@@ -131,10 +190,14 @@ export default function RozrywkaPage() {
   const bowlingLanes = counts?.laneCount ?? 0;
 
   return (
-    <div className="grid gap-8 p-4">
-      <h1 className="text-3xl font-semibold">Rozrywka</h1>
+    <div className="grid gap-8 px-4 py-4 md:px-0">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Rozrywka</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Bilard, kręgle i wydarzenia specjalne.</p>
+      </div>
 
-      {/* WYDARZENIA ROZRYWKOWE */}
+      {/* Events */}
       <AnimatePresence mode="wait" initial={false}>
         {loadingEvents ? (
           <MotionWrap k="events-loading">
@@ -163,7 +226,7 @@ export default function RozrywkaPage() {
                   ))}
                 </CarouselContent>
               </Carousel>
-              <div className="hidden justify-center md:flex mt-3">
+              <div className="mt-3 hidden justify-center md:flex">
                 <DotNav api={api} label="Nawigacja karuzeli wydarzeń" />
               </div>
             </div>
@@ -171,123 +234,32 @@ export default function RozrywkaPage() {
         )}
       </AnimatePresence>
 
-      {/* BILARD + KRĘGLE */}
+      {/* Bilard + Kręgle */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* BILARD */}
-        <Card className="overflow-hidden">
-          <div className="relative h-48 w-full md:h-44">
-            <img
-              src="/images/icons/bilard.png"
-              alt="Ikona bilarda"
-              className="h-full w-full object-contain"
-              loading="lazy"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
-            />
-          </div>
-
-          <CardHeader>
-            <CardTitle>Bilard</CardTitle>
-          </CardHeader>
-
-          {/* FIXED min-height -> zero layout shift */}
-          <CardContent className="grid gap-4 min-h-[140px]">
-            <AnimatePresence mode="wait" initial={false}>
-              {loadingSettings ? (
-                <MotionWrap k="billiard-loading">
-                  <div role="status" aria-live="polite">
-                    <SettingsSkeleton />
-                  </div>
-                </MotionWrap>
-              ) : (
-                <MotionWrap k="billiard-ready" className="grid gap-4">
-                  <>
-                    {billiardEnabled ? (
-                      <p className="text-muted-foreground">
-                        {billiardPrice} zł / godz. Zarezerwuj do {billiardTables}{" "}
-                        {pluralPL(billiardTables, "stołu", "stołów")}
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        {billiardDisabledMsg || "Rezerwacje bilarda są chwilowo wyłączone."}
-                      </p>
-                    )}
-
-                    <Button
-                      asChild
-                      variant="default"
-                      className="bg-black text-white hover:bg-black/90"
-                      disabled={!billiardEnabled}
-                      aria-disabled={!billiardEnabled}
-                    >
-                      <Link href="/rezerwacje/bilard">Rezerwuj bilard</Link>
-                    </Button>
-                  </>
-                </MotionWrap>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
-
-        {/* KRĘGLE */}
-        <Card className="overflow-hidden">
-          <div className="relative h-48 w-full md:h-44">
-            <img
-              src="/images/icons/bowling-transparent.png"
-              alt="Ikona kręgli"
-              className="h-full w-full object-contain"
-              loading="lazy"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
-            />
-          </div>
-
-          <CardHeader>
-            <CardTitle>Kręgle</CardTitle>
-          </CardHeader>
-
-          {/* FIXED min-height -> zero layout shift */}
-          <CardContent className="grid gap-4 min-h-[140px]">
-            <AnimatePresence mode="wait" initial={false}>
-              {loadingSettings ? (
-                <MotionWrap k="bowling-loading">
-                  <div role="status" aria-live="polite">
-                    <SettingsSkeleton />
-                  </div>
-                </MotionWrap>
-              ) : (
-                <MotionWrap k="bowling-ready" className="grid gap-4">
-                  <>
-                    {bowlingEnabled ? (
-                      <p className="text-muted-foreground">
-                        {bowlingPrice} zł / godz. Zarezerwuj do {bowlingLanes}{" "}
-                        {pluralPL(bowlingLanes, "toru", "torów")}
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        {bowlingDisabledMsg || "Rezerwacje kręgli są chwilowo wyłączone."}
-                      </p>
-                    )}
-
-                    <Button
-                      asChild
-                      variant="default"
-                      className="bg-black text-white hover:bg-black/90"
-                      disabled={!bowlingEnabled}
-                      aria-disabled={!bowlingEnabled}
-                    >
-                      <Link href="/rezerwacje/kregle">Rezerwuj kręgle</Link>
-                    </Button>
-                  </>
-                </MotionWrap>
-              )}
-            </AnimatePresence>
-          </CardContent>
-        </Card>
+        <ActivityCard
+          photo="/images/20260503_184125.jpg"
+          alt="Bilard w Centrum Spotkań Black"
+          title="Bilard"
+          loading={loadingSettings}
+          enabled={billiardEnabled}
+          disabledMsg={billiardDisabledMsg}
+          price={billiardPrice}
+          countLabel={`do ${billiardTables} ${pluralPL(billiardTables, "stołu", "stołów")}`}
+          href="/rezerwacje/bilard"
+          ctaLabel="Rezerwuj bilard"
+        />
+        <ActivityCard
+          photo="/images/20260524_160458.jpg"
+          alt="Kręgle w Centrum Spotkań Black"
+          title="Kręgle"
+          loading={loadingSettings}
+          enabled={bowlingEnabled}
+          disabledMsg={bowlingDisabledMsg}
+          price={bowlingPrice}
+          countLabel={`do ${bowlingLanes} ${pluralPL(bowlingLanes, "toru", "torów")}`}
+          href="/rezerwacje/kregle"
+          ctaLabel="Rezerwuj kręgle"
+        />
       </div>
     </div>
   );

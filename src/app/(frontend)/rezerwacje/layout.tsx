@@ -11,17 +11,15 @@ const AccessibilityPanelScript = <Script
 
 export default function RezerwacjeLayout({ children }: { children: ReactNode }) {
   return (
-    <section aria-label="Rezerwacje" className="space-y-6 p-4">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold">Rezerwacje</h1>
-        <p className="text-muted-foreground">
+    <section aria-label="Rezerwacje" className="grid gap-6 px-4 py-4 md:px-0">
+      <header className="grid gap-1">
+        <h1 className="text-3xl font-bold tracking-tight">Rezerwacje</h1>
+        <p className="text-sm text-muted-foreground">
           Wybierz usługę i zarezerwuj termin.
         </p>
       </header>
 
       <ReservationNav />
-
-      <Separator />
 
       <div>{children}{AccessibilityPanelScript}</div>
     </section>

@@ -19,6 +19,10 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Centrum Spotkań Black",
   description: "Jedzenie. Rozrywka. Wspólne chwile.",
+  icons: {
+    icon: "/images/logo/logo.png",
+    apple: "/images/logo/logo.png",
+  },
 }
 
 export default async function FrontendLayout({ children }: { children: ReactNode }) {

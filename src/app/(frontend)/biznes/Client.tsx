@@ -6,10 +6,9 @@ import { AnimatePresence, motion } from "framer-motion"
 import type { CarouselApi } from "@/components/ui/carousel"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { CalendarDays, CalendarCheck, Banknote, Users } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { ReservationRules } from "@/components/reservations/ReservationRules"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ErrorSlot } from "@/components/forms/ErrorSlot"
@@ -42,7 +41,6 @@ type CmsEvent = {
 
 const FALLBACK_IMG = "/images/icons/black-heart.png"
 
-/** --- Framer Motion: collapse/expand organizer form --- */
 const collapseVariants = {
   closed: { height: 0, opacity: 0, y: -6 },
   open: { height: "auto", opacity: 1, y: 0 },
@@ -63,12 +61,6 @@ function toNumberSafe(v: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
-/**
- * Bez timezone-krzywdy:
- * - data z `day` jako PL string
- * - czas z `startHour/startMinute`
- * - allDay -> "Całodniowe"
- */
 function getDisplayDateTimePL(e: CmsEvent): { date: string; time: string } | null {
   if (!e.day) return null
   const d = new Date(e.day)
@@ -127,7 +119,6 @@ function MotionWrap({
   )
 }
 
-/** fixed height -> zero layout shift */
 function EventsSkeleton() {
   return (
     <div className="grid gap-3">
@@ -161,14 +152,16 @@ function EventSlide({
           className="h-full w-full object-contain"
           loading="lazy"
         />
-        {!e.imageUrl && <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
-        />}
+        {!e.imageUrl && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
+          />
+        )}
       </div>
 
       <div className="grid gap-1">
-        <p className="font-medium">{e.title}</p>
+        <p className="font-semibold">{e.title}</p>
 
         <p className="text-sm text-muted-foreground">
           {e.description?.trim() ? e.description : "Szczegóły wydarzenia będą dostępne wkrótce."}
@@ -183,7 +176,9 @@ function EventSlide({
         {priceLabel ? (
           <p className="text-sm">
             <span className="font-medium">Cena:</span> {priceLabel}{" "}
-            <span className="text-muted-foreground">{priceLabel !== "Darmowe" ? "(płatność na miejscu)" : ""}</span>
+            <span className="text-muted-foreground">
+              {priceLabel !== "Darmowe" ? "(płatność na miejscu)" : ""}
+            </span>
           </p>
         ) : null}
 
@@ -197,10 +192,10 @@ function EventSlide({
       {showSignupButton ? (
         <Button
           type="button"
-          className="bg-black text-white hover:bg-black/90 md:self-start"
+          className="md:self-start"
           onClick={() => onSignup(String(e.id))}
         >
-          Zapisz się na wydarzenie
+          Zapisz się
         </Button>
       ) : null}
     </div>
@@ -282,41 +277,68 @@ export default function RezerwacjeBiznesPage() {
   }
 
   const hasBusinessEvents = events.length > 0
+  const eventsTitle = loadingEvents ? "Wydarzenia" : events.length <= 1 ? "Wydarzenie" : "Wydarzenia"
 
   return (
-    <div className="grid gap-6 p-4">
-      <ReservationRules title="Zapisy na wydarzenia biznesowe">
-        <p>Płatność na miejscu.</p>
-        <p>Limit miejsc zależy od wydarzenia.</p>
-      </ReservationRules>
+    <div className="grid gap-8 px-4 py-4 md:px-0">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Biznes & Eventy</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Konferencje, szkolenia, integracje firmowe i więcej.
+        </p>
+      </div>
 
-      {/* WYDARZENIA BIZNESOWE */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{loadingEvents ? "Wydarzenia" : events.length <= 1 ? "Wydarzenie" : "Wydarzenia"}</CardTitle>
-        </CardHeader>
+      {/* Rules strip */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card px-5 py-3 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <CalendarCheck aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          Zapisy na wydarzenia biznesowe
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Banknote aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          Płatność na miejscu
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Users aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          Limit miejsc zależy od wydarzenia
+        </span>
+      </div>
 
-        {/* FIXED min-height -> brak layout shift */}
-        <CardContent className="grid gap-4 min-h-[240px]">
+      {/* Events section */}
+      <div className="grid gap-4">
+        <div className="flex items-center gap-4">
+          <h2 className="whitespace-nowrap text-xl font-bold tracking-tight">{eventsTitle}</h2>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border bg-card">
           <AnimatePresence mode="wait" initial={false}>
             {loadingEvents ? (
-              <MotionWrap k="biz-events-loading">
-                <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
+              <MotionWrap k="biz-events-loading" className="p-6">
+                <div role="status" aria-live="polite">
                   <EventsSkeleton />
                 </div>
               </MotionWrap>
             ) : !events.length ? (
-              <MotionWrap k="biz-events-empty">
-                <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                  Brak nadchodzących wydarzeń biznesowych.
-                </div>
+              <MotionWrap
+                k="biz-events-empty"
+                className="flex flex-col items-center justify-center px-6 py-12 text-center"
+              >
+                <CalendarDays aria-hidden="true" className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                <p className="font-medium text-foreground" role="status" aria-live="polite">
+                  Brak nadchodzących wydarzeń
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Sprawdź ponownie wkrótce lub wyślij zapytanie poniżej.
+                </p>
               </MotionWrap>
             ) : events.length === 1 ? (
-              <MotionWrap k="biz-events-single">
+              <MotionWrap k="biz-events-single" className="p-6">
                 <EventSlide e={events[0]!} onSignup={handleSignupClick} showSignupButton={hasBusinessEvents} />
               </MotionWrap>
             ) : (
-              <MotionWrap k="biz-events-carousel" className="grid gap-3">
+              <MotionWrap k="biz-events-carousel" className="p-6">
                 <div className="relative w-full overflow-hidden">
                   <Carousel
                     aria-label="Karuzela wydarzeń biznesowych"
@@ -324,7 +346,6 @@ export default function RezerwacjeBiznesPage() {
                     setApi={setApi as any}
                     className="w-full overflow-hidden"
                   >
-                    {/* spacing jak w OfferSection -> stabilnie */}
                     <CarouselContent className="-ml-4">
                       {events.map((e) => (
                         <CarouselItem key={String(e.id)} className="pl-4 basis-full">
@@ -334,24 +355,31 @@ export default function RezerwacjeBiznesPage() {
                     </CarouselContent>
                   </Carousel>
 
-                  <div className="hidden justify-center md:flex mt-3">
+                  <div className="mt-3 hidden justify-center md:flex">
                     <DotNav api={api} label="Nawigacja karuzeli wydarzeń biznesowych" />
                   </div>
                 </div>
               </MotionWrap>
             )}
           </AnimatePresence>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Formularz organizatora */}
-      <Card ref={signupRef}>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Chcesz zorganizować event?</CardTitle>
-
+      {/* CTA + organizer form */}
+      <div
+        className="overflow-hidden rounded-2xl border border-[hsl(var(--brand)/0.35)] bg-card"
+        ref={signupRef}
+      >
+        <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-lg font-semibold">Chcesz zorganizować event?</div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Opisz swoje potrzeby — skontaktujemy się z Tobą.
+            </p>
+          </div>
           <Button
             type="button"
-            className="bg-black text-white hover:bg-black/90"
+            className="shrink-0"
             onClick={() => {
               setSent(false)
               setShowOrganizerForm((v) => !v)
@@ -359,9 +387,8 @@ export default function RezerwacjeBiznesPage() {
           >
             {showOrganizerForm ? "Zwiń formularz" : "Wyślij zapytanie"}
           </Button>
-        </CardHeader>
+        </div>
 
-        {/* ANIMATED COLLAPSE / EXPAND */}
         <AnimatePresence initial={false}>
           {showOrganizerForm ? (
             <motion.div
@@ -373,8 +400,7 @@ export default function RezerwacjeBiznesPage() {
               transition={collapseTransition}
               style={{ overflow: "hidden" }}
             >
-              <CardContent className="grid gap-6">
-                {/* Inner swap: sent <-> form */}
+              <div className="border-t px-6 pb-6 pt-5">
                 <AnimatePresence mode="wait" initial={false}>
                   {sent ? (
                     <motion.div
@@ -386,7 +412,9 @@ export default function RezerwacjeBiznesPage() {
                       className="grid gap-2"
                     >
                       <p className="font-medium">Wysłane ✅</p>
-                      <p className="text-sm text-muted-foreground">Dziękujemy — odezwiemy się najszybciej jak to możliwe.</p>
+                      <p className="text-sm text-muted-foreground">
+                        Dziękujemy — odezwiemy się najszybciej jak to możliwe.
+                      </p>
                       <Button
                         type="button"
                         variant="outline"
@@ -432,6 +460,7 @@ export default function RezerwacjeBiznesPage() {
                         />
                         <ErrorSlot message={form.formState.errors?.message?.message} />
                       </div>
+
                       <AcceptRulesCard
                         control={form.control as any}
                         trigger={form.trigger as any}
@@ -443,11 +472,11 @@ export default function RezerwacjeBiznesPage() {
                       />
 
                       <div className="grid gap-2">
-                        <p className="text-sm text-muted-foreground">Podaj jak najwięcej szczegółów, a my skontaktujemy się z Tobą.</p>
-
+                        <p className="text-sm text-muted-foreground">
+                          Podaj jak najwięcej szczegółów, a my skontaktujemy się z Tobą.
+                        </p>
                         <Button
                           type="submit"
-                          className="bg-black text-white hover:bg-black/90"
                           disabled={form.formState.isSubmitting}
                         >
                           {form.formState.isSubmitting ? "Wysyłam..." : "Wyślij zapytanie"}
@@ -456,11 +485,11 @@ export default function RezerwacjeBiznesPage() {
                     </motion.form>
                   )}
                 </AnimatePresence>
-              </CardContent>
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
-      </Card>
+      </div>
     </div>
   )
 }

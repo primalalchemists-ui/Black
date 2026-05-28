@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 export function ReservationRules({
   title,
@@ -8,9 +8,12 @@ export function ReservationRules({
   children: React.ReactNode;
 }) {
   return (
-    <Alert>
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription className="mt-2 space-y-2">{children}</AlertDescription>
-    </Alert>
+    <div className="flex gap-3 rounded-xl border bg-card px-4 py-3 text-sm">
+      <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="grid gap-0.5">
+        <div className="font-medium text-foreground">{title}</div>
+        <div className="text-muted-foreground [&>p]:leading-snug">{children}</div>
+      </div>
+    </div>
   );
 }

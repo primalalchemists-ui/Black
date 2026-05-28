@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
 
 const LINKS = [
   { href: "/rezerwacje/stoliki", label: "Stoliki" },
@@ -22,15 +21,18 @@ export function ReservationNav() {
           (pathname === "/rezerwacje" && l.href === "/rezerwacje/stoliki");
 
         return (
-          <Button
+          <Link
             key={l.href}
-            asChild
-            variant={active ? "default" : "outline"}
-            className={active ? "bg-black text-white hover:bg-black/90" : ""}
+            href={l.href}
             aria-current={active ? "page" : undefined}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-150 ${
+              active
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted text-foreground hover:bg-[hsl(var(--brand-soft))] hover:text-[hsl(var(--brand-foreground))]"
+            }`}
           >
-            <Link href={l.href}>{l.label}</Link>
-          </Button>
+            {l.label}
+          </Link>
         );
       })}
     </nav>
