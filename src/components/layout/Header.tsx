@@ -1,17 +1,11 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
 const NAV = [
   { href: "/restauracja", label: "Restauracja" },
@@ -21,14 +15,19 @@ const NAV = [
   { href: "/rezerwacje", label: "Rezerwacje" },
 ] as const
 
-export default function Header() {
-  const pathname = usePathname()
+const BRAND_CLS =
+  "bg-[hsl(var(--brand))] text-[hsl(var(--brand-foreground))] hover:bg-[hsl(var(--brand-hover))] hover:text-[hsl(var(--brand-foreground))]"
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/")
+const RESERVATION_CLS =
+  "bg-primary text-primary-foreground hover:bg-[hsl(30,4%,18%)] hover:text-primary-foreground"
+
+const NORMAL_CLS = "hover:bg-accent hover:text-accent-foreground"
+
+export default function Header() {
+  const [open, setOpen] = React.useState(false)
 
   return (
-    <header id="header" className="border-b shadow-[0_8px_24px_-10px_rgba(0,0,0,0.25)]">
+    <header id="header" className="fixed inset-x-0 top-0 z-40 bg-background/80 backdrop-blur-md shadow-[0_2px_16px_rgba(0,0,0,0.08)]">
       <div className="mx-auto flex max-w-[1232px] items-center justify-between gap-4 px-4 py-3">
         {/* LOGO */}
         <Link href="/" className="flex items-center gap-2" aria-label="Strona główna">
@@ -44,25 +43,24 @@ export default function Header() {
 
         {/* DESKTOP NAV */}
         <nav className="hidden md:flex items-center gap-2" aria-label="Główna nawigacja">
-          {NAV.map((item) => (
-            <Button
-              asChild
-              key={item.href}
-              variant="ghost"
-              className={
-                isActive(item.href)
-                  ? "bg-[hsl(var(--brand)/0.9)]"
-                  : ""
-              }
-            >
-              <Link href={item.href}>{item.label}</Link>
-            </Button>
-          ))}
+          {NAV.map((item) => {
+            const isReservation = item.href === "/rezerwacje"
+            return (
+              <Button
+                asChild
+                key={item.href}
+                variant="ghost"
+                className={isReservation ? RESERVATION_CLS : NORMAL_CLS}
+              >
+                <Link href={item.href}>{item.label}</Link>
+              </Button>
+            )
+          })}
         </nav>
 
         {/* MOBILE NAV */}
         <div className="md:hidden">
-          <Sheet>
+          <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" aria-label="Otwórz menu">
                 Menu
@@ -75,20 +73,21 @@ export default function Header() {
               </SheetHeader>
 
               <nav className="mt-6 grid gap-2" aria-label="Menu mobilne">
-                {NAV.map((item) => (
-                  <Button
-                    asChild
-                    key={item.href}
-                    variant="ghost"
-                    className={`justify-start ${
-                      isActive(item.href)
-                        ? "bg-[hsl(var(--brand)/0.9)]"
-                        : ""
-                    }`}
-                  >
-                    <Link href={item.href}>{item.label}</Link>
-                  </Button>
-                ))}
+                {NAV.map((item) => {
+                  const isReservation = item.href === "/rezerwacje"
+                  return (
+                    <Button
+                      asChild
+                      key={item.href}
+                      variant="ghost"
+                      className={`justify-start ${isReservation ? RESERVATION_CLS : NORMAL_CLS}`}
+                    >
+                      <Link href={item.href} onClick={() => setOpen(false)}>
+                        {item.label}
+                      </Link>
+                    </Button>
+                  )
+                })}
               </nav>
             </SheetContent>
           </Sheet>

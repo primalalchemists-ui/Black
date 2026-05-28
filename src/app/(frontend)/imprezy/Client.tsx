@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import PhotoGallery from "@/components/ui/PhotoGallery"
+import { GALLERY_PHOTOS } from "@/lib/galleryPhotos"
 import config from "@payload-config"
 import { getPayload } from "payload"
 
@@ -38,6 +40,8 @@ export default async function ImprezyPage() {
           </p>
         </CardContent>
       </Card>
+
+      <PhotoGallery photos={GALLERY_PHOTOS} title="Galeria" titleId="imprezy-gallery-title" />
     </div>
   )
 }

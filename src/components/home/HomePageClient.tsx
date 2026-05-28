@@ -7,13 +7,11 @@ import type { SiteSettings } from "@/lib/siteSettings"
 import HeroSection from "@/components/home/sections/HeroSection"
 import EventSection from "@/components/home/sections/EventSection"
 import OfferSection from "@/components/home/sections/OfferSection"
-import ContactSection from "@/components/home/sections/ContactSection"
+import GallerySection from "@/components/home/sections/GallerySection"
 import PlaceInfoSection from "@/components/home/sections/PlaceInfoSection"
-import { HomeFundingLogo } from "./components/HomeFundingLogo"
 
 export default function HomePageClient({ settings }: { settings: SiteSettings }) {
   const [heroApi, setHeroApi] = React.useState<CarouselApi>()
-  const [offerApi, setOfferApi] = React.useState<CarouselApi>()
 
   // AUTO-LOOP HERO co 5s (szanuje prefers-reduced-motion)
   React.useEffect(() => {
@@ -35,13 +33,13 @@ export default function HomePageClient({ settings }: { settings: SiteSettings })
     <div className="w-full max-w-full overflow-x-hidden">
       <div className="grid w-full max-w-full gap-12">
         <HeroSection setApi={setHeroApi} api={heroApi} />
-        <EventSection />
-        <OfferSection setApi={setOfferApi} api={offerApi} />
 
-        {/* ✅ 2 osobne karty */}
-        <ContactSection settings={settings} />
+        <OfferSection />
         <PlaceInfoSection settings={settings} />
-        <HomeFundingLogo />
+        <div className="mx-auto w-full px-4 md:px-0">
+          <div className="h-px bg-border" />
+        </div>
+        <GallerySection />
       </div>
     </div>
   )

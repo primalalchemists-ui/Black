@@ -427,7 +427,7 @@ export function ResourceGrid({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="absolute inset-0 grid place-items-center bg-white/70 backdrop-blur-sm"
+            className="absolute inset-0 grid place-items-center bg-card/80 backdrop-blur-sm"
           >
             <div className="grid place-items-center gap-3">
               <div className="h-16 w-16 animate-spin rounded-full border-4 border-black/20 border-t-black" />

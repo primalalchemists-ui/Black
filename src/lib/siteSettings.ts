@@ -19,7 +19,15 @@ export type SiteSettings = {
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const baseUrl = process.env.PAYLOAD_URL || "http://localhost:3000"
+  let baseUrl = process.env.PAYLOAD_URL
+
+  if (!baseUrl) {
+    const { headers } = await import("next/headers")
+    const h = await headers()
+    const host = h.get("host")
+    const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
+    baseUrl = host ? `${protocol}://${host}` : "http://localhost:3000"
+  }
 
   const res = await fetch(`${baseUrl}/api/globals/site-settings`, {
     next: { revalidate: 60 },

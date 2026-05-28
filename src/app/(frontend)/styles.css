@@ -4,34 +4,40 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --background: 42 39% 94%;        /* #F5F1E8 — ciepłe beżowe tło */
+    --foreground: 30 4% 9%;           /* #181716 — bardzo ciemny tekst */
+    --card: 40 38% 96%;               /* ciepły off-white, nie kontrastuje z tłem */
+    --card-foreground: 30 4% 9%;
+    --popover: 40 38% 96%;
+    --popover-foreground: 30 4% 9%;
+    --primary: 0 0% 3%;              /* #050505 — czarny CTA */
+    --primary-foreground: 43 100% 99%;
+    --secondary: 37 48% 88%;          /* #EFE4D2 — krem */
+    --secondary-foreground: 30 4% 9%;
+    --muted: 37 48% 88%;              /* #EFE4D2 */
+    --muted-foreground: 38 7% 41%;    /* #6F6A61 — ciepły szary */
+    --accent: 37 48% 88%;             /* #EFE4D2 */
+    --accent-foreground: 30 4% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --radius: 0.5rem;
+    --border: 36 33% 84%;             /* #E3D8C8 — ciepła ramka */
+    --input: 36 33% 84%;
+    --ring: 38 50% 61%;              /* gold focus ring */
+    --radius: 0.75rem;
 
-    /* 🔥 NEW: warm brand accent (for CTA, highlights) */
-    --brand: 36 51% 63%;
-    --brand-foreground: 240 10% 3.9%;
+    --brand: 38 50% 61%;             /* #CDA96A — złoty akcent */
+    --brand-hover: 38 45% 50%;       /* #B98F48 — złoty hover */
+    --brand-soft: 38 54% 79%;        /* #E8D3AA — miękkie złote tło */
+    --brand-foreground: 30 4% 9%;    /* ciemny tekst na złotym tle */
   }
 
   .dark {
@@ -54,9 +60,8 @@ html {
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-
-    /* 🔥 NEW: same brand accent for dark mode */
     --brand: 42 85% 60%;
+    --brand-hover: 38 45% 50%;
     --brand-foreground: 240 10% 3.9%;
   }
 
@@ -65,8 +70,73 @@ html {
   }
 
   body {
-    @apply bg-background text-foreground;
-    
+    @apply text-foreground;
+    font-family: var(--font-manrope), system-ui, sans-serif;
+    font-weight: 400;
+    line-height: 1.6;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--background)) 0%,
+      hsl(38 42% 92%) 50%,
+      hsl(38 46% 87%) 100%
+    );
+    min-height: 100svh;
+  }
+}
+
+/* Typografia */
+h1 {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.0;
+}
+
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+h3 {
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+button, [role="button"] {
+  font-weight: 600;
+}
+
+/* Hero overlay — ciemna lewa strona, złotawy odcień po prawej */
+.hero-overlay {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.80) 0%,
+      rgba(0, 0, 0, 0.55) 38%,
+      rgba(0, 0, 0, 0.30) 62%,
+      rgba(0, 0, 0, 0.14) 100%
+    ),
+    linear-gradient(
+      to left,
+      rgba(205, 169, 106, 0.22) 0%,
+      transparent 55%
+    );
+}
+
+@media (max-width: 767px) {
+  .hero-overlay {
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.28) 0%,
+        rgba(0, 0, 0, 0.65) 55%,
+        rgba(0, 0, 0, 0.82) 100%
+      ),
+      linear-gradient(
+        to bottom-left,
+        rgba(205, 169, 106, 0.15) 0%,
+        transparent 50%
+      );
   }
 }
 
@@ -93,32 +163,35 @@ html {
   background-size: 80px 80px;
 }
 
-
 .bg-geo-blobs {
   background:
     radial-gradient(600px at 90% 90%, rgba(207,166,115,.18), transparent 60%),
     radial-gradient(700px at 10% 20%, rgba(0,0,0,.08), transparent 60%);
 }
 
+.bg-sections-warm {
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      hsla(var(--brand) / 0.12) 12%,
+      hsla(var(--brand) / 0.18) 40%,
+      hsla(var(--brand) / 0.18) 60%,
+      hsla(var(--brand) / 0.12) 88%,
+      transparent 100%
+    ),
+    radial-gradient(1600px 600px at 15% 50%, hsla(var(--brand) / 0.08), transparent 70%),
+    radial-gradient(1600px 600px at 85% 50%, hsla(var(--brand) / 0.08), transparent 70%);
+}
+
 .bg-warm-glow {
   background:
-   
-    radial-gradient(
-      2000px 600px at 50% 75%,
-      hsla(var(--brand) / 0.30),
-      transparent 70%
-    ),
-     radial-gradient(
-      2000px 600px at 50% -30%,
-      hsla(var(--brand) / 0.32),
-      transparent 70%
-    ),
-    radial-gradient(
-      700px 420px at 50% 50%,
-      hsla(var(--brand) / 0.00),
-      transparent 65%
-    ),
+    radial-gradient(1800px 500px at 50% 10vh,  hsla(var(--brand) / 0.22), transparent 70%),
+    radial-gradient(1400px 400px at 10%  50vh, hsla(var(--brand) / 0.10), transparent 65%),
+    radial-gradient(1400px 400px at 90%  50vh, hsla(var(--brand) / 0.10), transparent 65%),
+    radial-gradient(1800px 500px at 50% 90vh,  hsla(var(--brand) / 0.20), transparent 70%),
     hsl(var(--background));
+  background-attachment: fixed;
 }
 
 .bg-warm-glow-1 {
@@ -129,8 +202,6 @@ html {
     radial-gradient(1200px 700px at 110% 40%, hsla(var(--brand) / 0.10), transparent 70%),
     hsl(var(--background));
 }
-
-
 
 .bg-warm-glow-external {
   background:
@@ -149,33 +220,25 @@ html {
 
 .bg-warm-glow-edges {
   background:
-    /* TOP */
     radial-gradient(
       900px 450px at 50% -25%,
       hsla(var(--brand) / 0.32),
       transparent 65%
     ),
-
-    /* BOTTOM */
     radial-gradient(
       900px 450px at 50% 125%,
       hsla(var(--brand) / 0.30),
       transparent 65%
     ),
-
-    /* LEFT */
     radial-gradient(
       450px 900px at -25% 50%,
       hsla(var(--brand) / 0.28),
       transparent 65%
     ),
-
-    /* RIGHT */
     radial-gradient(
       450px 900px at 125% 50%,
       hsla(var(--brand) / 0.28),
       transparent 65%
     ),
-
     hsl(var(--background));
 }

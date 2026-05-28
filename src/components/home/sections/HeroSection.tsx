@@ -10,20 +10,20 @@ import { motion, useReducedMotion } from "framer-motion"
 
 const HERO_SLIDES = [
   {
-    desktopSrc: "/images/desktop/slider-1.png",
-    mobileSrc: "/images/mobile/slider-1.jpg",
+    desktopSrc: "/images/desktop/slider-1.webp",
+    mobileSrc: "/images/mobile/slider-1.webp",
     alt: "Centrum Spotkań Black — wnętrze i klimat miejsca",
   },
-  {
-    desktopSrc: "/images/desktop/slider-2.png",
-    mobileSrc: "/images/mobile/slider-2.png",
-    alt: "Centrum Spotkań Black — strefa rozrywki",
-  },
-  {
-    desktopSrc: "/images/desktop/slider-4.png",
-    mobileSrc: "/images/mobile/slider-3.png",
-    alt: "Centrum Spotkań Black — restauracja i spotkania",
-  },
+  // {
+  //   desktopSrc: "/images/desktop/slider-2.png",
+  //   mobileSrc: "/images/mobile/slider-2.png",
+  //   alt: "Centrum Spotkań Black — strefa rozrywki",
+  // },
+  // {
+  //   desktopSrc: "/images/desktop/slider-4.png",
+  //   mobileSrc: "/images/mobile/slider-3.png",
+  //   alt: "Centrum Spotkań Black — restauracja i spotkania",
+  // },
 ] as const
 
 function FadeInBg({
@@ -130,7 +130,7 @@ export default function HeroSection({
                 </h1>
 
                 <p className="mt-2 text-sm text-white/85 sm:text-base">
-                  Restauracja, kręgle, bilard i wydarzenia — wszystko w jednym miejscu.
+                  Restauracja, imprezy, kręgle i bilard.
                 </p>
 
                 <div className="mt-4 pointer-events-auto">

@@ -135,62 +135,41 @@ export default function RozrywkaPage() {
       <h1 className="text-3xl font-semibold">Rozrywka</h1>
 
       {/* WYDARZENIA ROZRYWKOWE */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-          <CardTitle>{events.length <= 1 ? "Nadchodzące wydarzenie" : "Nadchodzące wydarzenia"}</CardTitle>
-
-          <Button asChild variant="default" className="bg-black text-white hover:bg-black/90">
-            <Link href="/rezerwacje/stoliki">Rezerwuj stolik</Link>
-          </Button>
-        </CardHeader>
-
-        {/* FIXED min-height -> zero layout shift */}
-        <CardContent className="grid gap-4 min-h-[220px]">
-          <AnimatePresence mode="wait" initial={false}>
-            {loadingEvents ? (
-              <MotionWrap k="events-loading">
-                <div role="status" aria-live="polite">
-                  <EventsSkeleton />
-                </div>
-              </MotionWrap>
-            ) : !events.length ? (
-              <MotionWrap k="events-empty">
-                <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                  Brak wydarzeń do wyświetlenia.
-                </div>
-              </MotionWrap>
-            ) : events.length === 1 ? (
-              <MotionWrap k="events-single">
-                <EventSlide e={events[0]!} />
-              </MotionWrap>
-            ) : (
-              <MotionWrap k="events-carousel" className="grid gap-3">
-                <div className="relative w-full overflow-hidden">
-                  <Carousel
-                    aria-label="Karuzela wydarzeń rozrywkowych"
-                    opts={{ align: "start", loop: true, containScroll: "trimSnaps", slidesToScroll: 1 }}
-                    setApi={setApi as any}
-                    className="w-full overflow-hidden"
-                  >
-                    {/* spacing jak w OfferSection -> bez rozjazdów */}
-                    <CarouselContent className="-ml-4">
-                      {events.map((e) => (
-                        <CarouselItem key={String(e.id)} className="pl-4 basis-full md:basis-1/2">
-                          <EventSlide e={e} />
-                        </CarouselItem>
-                      ))}
-                    </CarouselContent>
-                  </Carousel>
-
-                  <div className="hidden justify-center md:flex mt-3">
-                    <DotNav api={api} label="Nawigacja karuzeli wydarzeń" />
-                  </div>
-                </div>
-              </MotionWrap>
-            )}
-          </AnimatePresence>
-        </CardContent>
-      </Card>
+      <AnimatePresence mode="wait" initial={false}>
+        {loadingEvents ? (
+          <MotionWrap k="events-loading">
+            <div role="status" aria-live="polite">
+              <EventsSkeleton />
+            </div>
+          </MotionWrap>
+        ) : !events.length ? null : events.length === 1 ? (
+          <MotionWrap k="events-single">
+            <EventSlide e={events[0]!} href="/rezerwacje/stoliki" ctaLabel="Rezerwuj stolik" />
+          </MotionWrap>
+        ) : (
+          <MotionWrap k="events-carousel" className="grid gap-3">
+            <div className="relative w-full overflow-hidden">
+              <Carousel
+                aria-label="Karuzela wydarzeń rozrywkowych"
+                opts={{ align: "start", loop: true, containScroll: "trimSnaps", slidesToScroll: 1 }}
+                setApi={setApi as any}
+                className="w-full overflow-hidden"
+              >
+                <CarouselContent className="-ml-4">
+                  {events.map((e) => (
+                    <CarouselItem key={String(e.id)} className="pl-4 basis-full md:basis-1/2">
+                      <EventSlide e={e} href="/rezerwacje/stoliki" ctaLabel="Rezerwuj stolik" />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </Carousel>
+              <div className="hidden justify-center md:flex mt-3">
+                <DotNav api={api} label="Nawigacja karuzeli wydarzeń" />
+              </div>
+            </div>
+          </MotionWrap>
+        )}
+      </AnimatePresence>
 
       {/* BILARD + KRĘGLE */}
       <div className="grid gap-4 md:grid-cols-2">
