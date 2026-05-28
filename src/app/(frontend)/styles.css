@@ -174,32 +174,32 @@ button, [role="button"] {
     linear-gradient(
       to bottom,
       transparent 0%,
-      hsla(var(--brand) / 0.12) 12%,
-      hsla(var(--brand) / 0.18) 40%,
-      hsla(var(--brand) / 0.18) 60%,
-      hsla(var(--brand) / 0.12) 88%,
+      rgba(205, 169, 106, 0.12) 12%,
+      rgba(205, 169, 106, 0.18) 40%,
+      rgba(205, 169, 106, 0.18) 60%,
+      rgba(205, 169, 106, 0.12) 88%,
       transparent 100%
     ),
-    radial-gradient(1600px 600px at 15% 50%, hsla(var(--brand) / 0.08), transparent 70%),
-    radial-gradient(1600px 600px at 85% 50%, hsla(var(--brand) / 0.08), transparent 70%);
+    radial-gradient(1600px 600px at 15% 50%, rgba(205, 169, 106, 0.08), transparent 70%),
+    radial-gradient(1600px 600px at 85% 50%, rgba(205, 169, 106, 0.08), transparent 70%);
 }
 
 .bg-warm-glow {
   background:
-    radial-gradient(1800px 500px at 50% 10vh,  hsla(var(--brand) / 0.22), transparent 70%),
-    radial-gradient(1400px 400px at 10%  50vh, hsla(var(--brand) / 0.10), transparent 65%),
-    radial-gradient(1400px 400px at 90%  50vh, hsla(var(--brand) / 0.10), transparent 65%),
-    radial-gradient(1800px 500px at 50% 90vh,  hsla(var(--brand) / 0.20), transparent 70%),
+    radial-gradient(1800px 500px at 50% 10vh,  rgba(205, 169, 106, 0.22), transparent 70%),
+    radial-gradient(1400px 400px at 10%  50vh, rgba(205, 169, 106, 0.10), transparent 65%),
+    radial-gradient(1400px 400px at 90%  50vh, rgba(205, 169, 106, 0.10), transparent 65%),
+    radial-gradient(1800px 500px at 50% 90vh,  rgba(205, 169, 106, 0.20), transparent 70%),
     hsl(var(--background));
   background-attachment: fixed;
 }
 
 .bg-warm-glow-1 {
   background:
-    radial-gradient(2200px 700px at 50% -25%, hsla(var(--brand) / 0.26), transparent 72%),
-    radial-gradient(2200px 700px at 50% 70%,  hsla(var(--brand) / 0.24), transparent 72%),
-    radial-gradient(1200px 700px at -10% 40%, hsla(var(--brand) / 0.10), transparent 70%),
-    radial-gradient(1200px 700px at 110% 40%, hsla(var(--brand) / 0.10), transparent 70%),
+    radial-gradient(2200px 700px at 50% -25%, rgba(205, 169, 106, 0.26), transparent 72%),
+    radial-gradient(2200px 700px at 50% 70%,  rgba(205, 169, 106, 0.24), transparent 72%),
+    radial-gradient(1200px 700px at -10% 40%, rgba(205, 169, 106, 0.10), transparent 70%),
+    radial-gradient(1200px 700px at 110% 40%, rgba(205, 169, 106, 0.10), transparent 70%),
     hsl(var(--background));
 }
 
@@ -207,12 +207,12 @@ button, [role="button"] {
   background:
     radial-gradient(
       900px 500px at 50% -25%,
-      hsla(var(--brand) / 0.35),
+      rgba(205, 169, 106, 0.35),
       transparent 65%
     ),
     radial-gradient(
       900px 500px at 50% 125%,
-      hsla(var(--brand) / 0.30),
+      rgba(205, 169, 106, 0.30),
       transparent 65%
     ),
     hsl(var(--background));
@@ -222,22 +222,22 @@ button, [role="button"] {
   background:
     radial-gradient(
       900px 450px at 50% -25%,
-      hsla(var(--brand) / 0.32),
+      rgba(205, 169, 106, 0.32),
       transparent 65%
     ),
     radial-gradient(
       900px 450px at 50% 125%,
-      hsla(var(--brand) / 0.30),
+      rgba(205, 169, 106, 0.30),
       transparent 65%
     ),
     radial-gradient(
       450px 900px at -25% 50%,
-      hsla(var(--brand) / 0.28),
+      rgba(205, 169, 106, 0.28),
       transparent 65%
     ),
     radial-gradient(
       450px 900px at 125% 50%,
-      hsla(var(--brand) / 0.28),
+      rgba(205, 169, 106, 0.28),
       transparent 65%
     ),
     hsl(var(--background));
