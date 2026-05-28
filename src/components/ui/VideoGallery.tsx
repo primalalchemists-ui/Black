@@ -11,41 +11,109 @@ function VideoThumbnail({
   src,
   label,
   onClick,
+  index = 0,
 }: {
   src: string
   label?: string
   onClick: () => void
+  index?: number
 }) {
   const videoRef = React.useRef<HTMLVideoElement>(null)
+  const [hasFrame, setHasFrame] = React.useState(false)
+  const reduceMotion = useReducedMotion()
 
   function handleLoadedMetadata() {
     const v = videoRef.current
     if (v) v.currentTime = 0.001
   }
 
+  function handleFrame() {
+    setHasFrame(true)
+  }
+
   return (
-    <button
+    <motion.button
       type="button"
+      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.45,
+        delay: reduceMotion ? 0 : index * 0.09,
+        ease: [0.25, 0.46, 0.45, 0.94],
+      }}
       className="group relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted"
       onClick={onClick}
       aria-label={label ? `Odtwórz: ${label}` : "Odtwórz film"}
     >
-      <video
+      {/* Shimmer sweep while frame loads */}
+      <AnimatePresence>
+        {!hasFrame && !reduceMotion && (
+          <motion.div
+            key="shimmer"
+            className="absolute inset-0 z-10"
+            exit={{ opacity: 0, transition: { duration: 0.5, ease: "easeOut" } }}
+          >
+            <motion.div
+              className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+              animate={{ x: ["-100%", "350%"] }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                ease: "linear",
+                repeatDelay: 0.7,
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Video frame */}
+      <motion.video
         ref={videoRef}
         src={src}
         preload="metadata"
         muted
         playsInline
+        tabIndex={-1}
         className="h-full w-full object-cover"
         onLoadedMetadata={handleLoadedMetadata}
-        tabIndex={-1}
+        onSeeked={handleFrame}
+        onCanPlay={handleFrame}
+        animate={{
+          opacity: hasFrame ? 1 : 0,
+          scale: hasFrame ? 1 : 1.06,
+        }}
+        transition={{ duration: 0.55, ease: "easeOut" }}
       />
-      <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/45">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
+
+      {/* Dark overlay */}
+      <motion.div
+        className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45"
+        animate={{ opacity: hasFrame ? 1 : 0 }}
+        transition={{ duration: 0.4 }}
+      />
+
+      {/* Play button */}
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        animate={{ opacity: hasFrame ? 1 : 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <motion.div
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110"
+          animate={{
+            scale: hasFrame ? 1 : 0.6,
+            opacity: hasFrame ? 1 : 0,
+          }}
+          transition={{
+            duration: 0.45,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+        >
           <Play className="h-5 w-5 translate-x-0.5 text-black" fill="currentColor" />
-        </div>
-      </div>
-    </button>
+        </motion.div>
+      </motion.div>
+    </motion.button>
   )
 }
 
@@ -97,7 +165,6 @@ function VideoLightbox({
   }, [idx])
 
   function handleTouchStart(e: React.TouchEvent) {
-    // nie przechwytuj jeśli dotknięto video (żeby kontrolki działały)
     if ((e.target as HTMLElement).tagName === "VIDEO") return
     touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() }
     lockAxis.current = null
@@ -107,7 +174,6 @@ function VideoLightbox({
     if (!touchRef.current) return
     const dx = e.touches[0].clientX - touchRef.current.x
     const dy = e.touches[0].clientY - touchRef.current.y
-
     if (lockAxis.current === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
       lockAxis.current = Math.abs(dx) >= Math.abs(dy) ? "h" : "v"
     }
@@ -118,11 +184,9 @@ function VideoLightbox({
     const dx = e.changedTouches[0].clientX - touchRef.current.x
     const dt = Math.max(1, Date.now() - touchRef.current.t)
     const velocity = Math.abs(dx) / dt
-
     if (lockAxis.current === "h" && (Math.abs(dx) > 60 || velocity > 0.3)) {
       dx < 0 ? next() : prev()
     }
-
     touchRef.current = null
     lockAxis.current = null
   }
@@ -224,6 +288,7 @@ export default function VideoGallery({
                     src={video.src}
                     label={video.label}
                     onClick={() => setLightboxIdx(i)}
+                    index={i}
                   />
                 </CarouselItem>
               ))}
@@ -239,6 +304,7 @@ export default function VideoGallery({
               src={video.src}
               label={video.label}
               onClick={() => setLightboxIdx(i)}
+              index={i}
             />
           ))}
         </div>
