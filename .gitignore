@@ -42,6 +42,9 @@ next-env.d.ts
 
 /media
 
+# jednorazowy skrypt seedujący menu (nie wrzucamy do repo)
+scripts/seed-menu.ts
+
 # Playwright
 node_modules/
 /test-results/

@@ -33,7 +33,7 @@ export default function Header() {
         {/* LOGO */}
         <Link href="/" className="flex items-center gap-2" aria-label="Strona główna">
           <Image
-            src="/images/logo/logo.png"
+            src="/images/logo/logo-2.png"
             alt="Centrum Spotkań Black"
             width={160}
             height={48}

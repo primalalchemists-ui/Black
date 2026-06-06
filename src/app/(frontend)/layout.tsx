@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   title: "Centrum Spotkań Black",
   description: "Jedzenie. Rozrywka. Wspólne chwile.",
   icons: {
-    icon: "/images/logo/logo.png",
-    apple: "/images/logo/logo.png",
+    icon: "/images/logo/logo-2-icon.png",
+    apple: "/images/logo/logo-2-icon.png",
   },
 }
 

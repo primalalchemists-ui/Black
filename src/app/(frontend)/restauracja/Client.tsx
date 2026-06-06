@@ -165,7 +165,7 @@ export default function RestauracjaPage() {
         setError(null);
 
         const [catsRes, itemsRes, dishRes] = await Promise.all([
-          fetch("/api/menu-categories?where[active][equals]=true&sort=order", { cache: "no-store" }),
+          fetch("/api/menu-categories?where[active][equals]=true&limit=1000&sort=order", { cache: "no-store" }),
           fetch("/api/menu-items?where[active][equals]=true&depth=2&limit=1000&sort=order", { cache: "no-store" }),
           fetch("/api/globals/dish-of-day?depth=3", { cache: "no-store" }),
         ]);
