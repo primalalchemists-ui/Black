@@ -1002,6 +1002,7 @@ export interface SiteSetting {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  nip?: string | null;
   facebook?: string | null;
   instagram?: string | null;
   openingHours?:
@@ -1097,6 +1098,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
   phone?: T;
   email?: T;
   address?: T;
+  nip?: T;
   facebook?: T;
   instagram?: T;
   openingHours?: T;

@@ -205,10 +205,17 @@ export default function RezerwacjeStolikiPage() {
       <ReservationStepper step={step} />
 
       <ReservationRules title="Zasady rezerwacji stolików">
-        <p>1 stolik (≤ 4 osoby) — bez zaliczki.</p>
-        <p>2+ stoliki — zaliczka 200 zł.</p>
-        <p>Brak obecności przez ~15min od terminu może skutkować zwolnieniem rezerwacji.</p>
-        <p>Prosimy o informację telefoniczną w razie spóźnienia.</p>
+        <p>Rezerwacje odbywają się na zasadach określonych w Regulaminie obiektu.</p>
+        <p>
+          <a
+            href="/api/regulamin"
+            target="_blank"
+            rel="noreferrer"
+            className="underline transition-colors hover:text-foreground"
+          >
+            Zobacz regulamin
+          </a>
+        </p>
       </ReservationRules>
 
       {!isReservationsEnabled ? (

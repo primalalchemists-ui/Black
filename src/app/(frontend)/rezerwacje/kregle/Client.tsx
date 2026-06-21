@@ -211,9 +211,17 @@ export default function RezerwacjeKreglePage() {
       <ReservationStepper step={step} />
 
       <ReservationRules title="Zasady rezerwacji kręgli">
-        <p>Cena: wg ustawień (panel CMS).</p>
-        <p>Docelowo: płatność z góry (P24).</p>
-        <p>Możesz wybrać różne godziny dla różnych torów.</p>
+        <p>Rezerwacje odbywają się na zasadach określonych w Regulaminie obiektu.</p>
+        <p>
+          <a
+            href="/api/regulamin"
+            target="_blank"
+            rel="noreferrer"
+            className="underline transition-colors hover:text-foreground"
+          >
+            Zobacz regulamin
+          </a>
+        </p>
       </ReservationRules>
 
       {step === 1 ? (

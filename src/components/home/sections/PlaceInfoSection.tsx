@@ -1,5 +1,5 @@
 import type { SiteSettings } from "@/lib/siteSettings"
-import { Clock, Mail, MapPin, Phone } from "lucide-react"
+import { Clock, Hash, Mail, MapPin, Phone } from "lucide-react"
 
 const WEEKEND_KEYS = ["saturday", "sunday", "sobota", "niedziela", "sat", "sun"]
 
@@ -15,7 +15,7 @@ export default function PlaceInfoSection({ settings }: { settings: SiteSettings 
   if (!hasDescription && !hasHours) return null
 
   return (
-    <section aria-labelledby="place-info-title" className="mx-auto w-full px-4 md:px-0">
+    <section id="informacje" aria-labelledby="place-info-title" className="mx-auto w-full px-4 md:px-0">
       {/* nagłówek z akcentem */}
       <div className="mb-8 flex items-center gap-4">
         <h2 id="place-info-title" className="text-2xl font-semibold">
@@ -60,6 +60,12 @@ export default function PlaceInfoSection({ settings }: { settings: SiteSettings 
                   <Mail className="h-4 w-4 shrink-0 text-[hsl(var(--brand))]" />
                   <span>{settings.email}</span>
                 </a>
+              )}
+              {settings.nip && (
+                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                  <Hash className="h-4 w-4 shrink-0 text-[hsl(var(--brand))]" />
+                  <span>NIP: {settings.nip}</span>
+                </div>
               )}
             </div>
           </div>

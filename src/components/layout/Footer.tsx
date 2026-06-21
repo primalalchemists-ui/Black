@@ -43,6 +43,13 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
           {/* linki */}
           <div className="flex flex-col gap-3 text-sm md:flex-row md:items-center md:gap-6">
             <a
+              href="/#informacje"
+              className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+            >
+              Dane kontaktowe
+            </a>
+
+            <a
               href="/dofinansowanie"
               className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >

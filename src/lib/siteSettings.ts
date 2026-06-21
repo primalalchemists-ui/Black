@@ -13,6 +13,7 @@ export type SiteSettings = {
   phone?: string
   email?: string
   address?: string
+  nip?: string
   facebook?: string
   instagram?: string
   openingHours?: OpeningHour[]

@@ -217,8 +217,17 @@ export default function RezerwacjeBilardPage() {
       <ReservationStepper step={step} />
 
       <ReservationRules title="Zasady rezerwacji bilardu">
-        <p>Cena: wg ustawień (panel CMS).</p>
-        <p>Możesz wybrać różne godziny dla różnych stołów.</p>
+        <p>Rezerwacje odbywają się na zasadach określonych w Regulaminie obiektu.</p>
+        <p>
+          <a
+            href="/api/regulamin"
+            target="_blank"
+            rel="noreferrer"
+            className="underline transition-colors hover:text-foreground"
+          >
+            Zobacz regulamin
+          </a>
+        </p>
       </ReservationRules>
 
       {step === 1 ? (

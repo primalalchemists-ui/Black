@@ -13,6 +13,7 @@ export const SiteSettings: GlobalConfig = {
     { name: 'phone', label: 'Telefon', type: 'text' },
     { name: 'email', label: 'E-mail', type: 'email' },
     { name: 'address', label: 'Adres', type: 'textarea' },
+    { name: 'nip', label: 'NIP', type: 'text' },
     { name: 'facebook', label: 'Facebook', type: 'text' },
     { name: 'instagram', label: 'Instagram', type: 'text' },
     { name: 'openingHours', label: 'Godziny otwarcia (JSON)', type: 'json' },
