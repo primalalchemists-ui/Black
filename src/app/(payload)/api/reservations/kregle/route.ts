@@ -13,6 +13,8 @@ import {
   resourceTypeForReservation,
   mapServiceForBlackout,
   hourFloatFromHHMM,
+  getNowInWarsaw,
+  isSlotBookableWithLeadTime,
 } from "../_shared";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes } from "../_openingHours";
@@ -55,14 +57,6 @@ function blackoutRange(dateStr: string, b: any) {
 
   if (end <= start) return null;
   return { s: start, e: end };
-}
-
-// ✅ helper: lokalny YYYY-MM-DD
-function localISODate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
 }
 
 // ✅ spójny dayISO z date-only
@@ -174,16 +168,10 @@ export async function GET(req: Request) {
     },
   });
 
-  // ✅ past-slots gate
-  const now = new Date();
-  const todayISO = localISODate(now);
-  const isPastDay = date < todayISO;
-  const isToday = date === todayISO;
-
-  function statusForSlot(args: { slotStart: Date; slotEnd: Date; resourceId: string }): CellStatus {
+  // ✅ past-slots gate (Europe/Warsaw, 15-min lead time)
+  function statusForSlot(args: { slotStart: Date; slotEnd: Date; resourceId: string; slotHour: number; slotMinute: number }): CellStatus {
     if (!enabled) return "blocked";
-    if (isPastDay) return "blocked";
-    if (isToday && args.slotStart.getTime() < now.getTime()) return "blocked";
+    if (!isSlotBookableWithLeadTime(date, args.slotHour, args.slotMinute, 15)) return "blocked";
 
     const blocked = (bRes.docs || []).some((b: any) => {
       const ids = relIds(b.resources);
@@ -210,13 +198,14 @@ export async function GET(req: Request) {
   }
 
   const slots = times.map((t) => {
+    const [slotHour, slotMinute] = t.split(":").map(Number);
     const startHourFloat = hourFloatFromHHMM(t);
     const slotStart = toDateAtHour(date, startHourFloat);
     const slotEnd = addMinutes(slotStart, slotMinutes);
 
     const statuses: Record<string, CellStatus> = {};
     for (const r of resources) {
-      statuses[r.id] = statusForSlot({ slotStart, slotEnd, resourceId: r.id });
+      statuses[r.id] = statusForSlot({ slotStart, slotEnd, resourceId: r.id, slotHour, slotMinute });
     }
 
     return { time: t, statuses };
@@ -281,8 +270,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const now = new Date();
-  const todayISO = localISODate(now);
+  const todayISO = getNowInWarsaw().dateStr;
 
   if (typeof data?.date === "string" && data.date < todayISO) {
     return NextResponse.json(
@@ -402,9 +390,9 @@ export async function POST(req: Request) {
         );
       }
 
-      if (data.date === todayISO && startsAt.getTime() < now.getTime()) {
+      if (!isSlotBookableWithLeadTime(data.date, startHour, 0, 15)) {
         return NextResponse.json(
-          { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: "Nie można rezerwować godzin, które już minęły." }] },
+          { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: "Nie można rezerwować godzin, które już minęły lub zaczynają się za mniej niż 15 minut." }] },
           { status: 409 }
         );
       }
@@ -507,11 +495,15 @@ export async function POST(req: Request) {
   const startsAt = toDateAtHour(data.date, data.startHour);
   const endsAt = toDateAtHour(data.date, (data.endHour ?? 0) + 1);
 
-  if (data.date === todayISO && startsAt.getTime() < now.getTime()) {
-    return NextResponse.json(
-      { error: "NO_AVAILABILITY", issues: [{ path: ["startHour"], message: "Nie można rezerwować godzin, które już minęły." }] },
-      { status: 409 }
-    );
+  {
+    const startH = Math.floor(data.startHour ?? 0);
+    const startMn = Math.round(((data.startHour ?? 0) % 1) * 60);
+    if (!isSlotBookableWithLeadTime(data.date, startH, startMn, 15)) {
+      return NextResponse.json(
+        { error: "NO_AVAILABILITY", issues: [{ path: ["startHour"], message: "Nie można rezerwować godzin, które już minęły lub zaczynają się za mniej niż 15 minut." }] },
+        { status: 409 }
+      );
+    }
   }
 
   const found = await payload.find({

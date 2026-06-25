@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { reservationCreateRequestSchema } from "@/lib/validation/reservations";
+import { getNowInWarsaw, isSlotBookableWithLeadTime } from "../_shared";
 
 type OpeningHour = {
   key: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -52,21 +53,6 @@ function dayISOFromDateOnly(dateStr: string) {
   return new Date(Date.UTC(yy, mm - 1, dd, 12, 0, 0, 0)).toISOString();
 }
 
-// current HH:MM w czasie serwera
-function nowHHMM() {
-  const d = new Date();
-  const h = String(d.getHours()).padStart(2, "0");
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-function isTodayLocal(dateOnly: string) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}` === dateOnly;
-}
 
 // close może być 00:00 -> traktujemy jako 24:00 (czyli 1440)
 function resolveOpenCloseMinutes(oh: OpeningHour) {
@@ -210,20 +196,19 @@ export async function GET(req: Request) {
     },
   });
 
-  const isToday = isTodayLocal(date);
-  const nowM = minutesFromHHMM(nowHHMM());
-
   const out: SlotOut[] = [];
 
   for (const time of slots) {
+    const [slotHour, slotMinute] = time.split(":").map(Number);
     const slotM = minutesFromHHMM(time);
 
     const taken = takenSeatsInWindow(existing?.docs || [], slotM, blockDuration);
     const remaining = Math.max(0, onlineSeatsLimit - taken);
 
-    const timePassed = isToday ? slotM <= nowM : false;
-
-    const canBook = !timePassed && remaining >= partySize && onlineSeatsLimit > 0;
+    const canBook =
+      isSlotBookableWithLeadTime(date, slotHour, slotMinute, 15) &&
+      remaining >= partySize &&
+      onlineSeatsLimit > 0;
 
     out.push({ time, remaining, canBook });
   }
@@ -296,13 +281,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ blokuj przeszłe godziny dzisiaj
-    if (isTodayLocal(dateOnly)) {
-      const nowM = minutesFromHHMM(nowHHMM());
-      const slotM = minutesFromHHMM(time);
-      if (slotM <= nowM) {
+    // ✅ blokuj przeszłe sloty i wymuszaj 15-min wyprzedzenie (Europe/Warsaw)
+    {
+      const [slotHour, slotMinute] = time.split(":").map(Number);
+      if (!isSlotBookableWithLeadTime(dateOnly, slotHour, slotMinute, 15)) {
         return NextResponse.json(
-          { error: "PAST_TIME", issues: [issue(["hour"], "Nie można rezerwować godzin, które już minęły.")] },
+          { error: "PAST_TIME", issues: [issue(["hour"], "Nie można rezerwować godzin, które już minęły lub zaczynają się za mniej niż 15 minut.")] },
           { status: 409 }
         );
       }

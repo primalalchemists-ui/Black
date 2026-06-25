@@ -55,3 +55,49 @@ export function startOfLocalDayISO(d: Date) {
   x.setHours(12, 0, 0, 0); // 12:00 lokalnie => brak przesunięć dnia przez UTC
   return x.toISOString();
 }
+
+/**
+ * Aktualny czas w strefie Europe/Warsaw.
+ * Niezależny od strefy serwera (Railway = UTC).
+ */
+export function getNowInWarsaw(): { dateStr: string; h: number; m: number; totalMinutes: number } {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const h = Number(get("hour")) % 24; // niektóre locale dają "24" o północy
+  const m = Number(get("minute"));
+
+  return {
+    dateStr: `${get("year")}-${get("month")}-${get("day")}`,
+    h,
+    m,
+    totalMinutes: h * 60 + m,
+  };
+}
+
+/**
+ * Czy slot (date + hour:minute w Warsaw) jest jeszcze do zarezerwowania?
+ * Zwraca false dla minionych dni oraz slotów zaczynających się
+ * za mniej niż leadMinutes minut (domyślnie 15).
+ */
+export function isSlotBookableWithLeadTime(
+  date: string,
+  slotHour: number,
+  slotMinute: number,
+  leadMinutes = 15,
+): boolean {
+  const now = getNowInWarsaw();
+  if (date < now.dateStr) return false; // miniony dzień
+  if (date > now.dateStr) return true;  // przyszły dzień
+  // dzisiaj w Warsaw
+  return slotHour * 60 + slotMinute >= now.totalMinutes + leadMinutes;
+}
