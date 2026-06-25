@@ -1,11 +1,22 @@
 import { Download } from "lucide-react"
+import { getPayload } from "payload"
+import config from "@payload-config"
 
 export const metadata = {
   title: "Polityka prywatności | Centrum Spotkań Black",
   description: "Polityka prywatności serwisu kregielnia-wielun.pl — zasady przetwarzania danych osobowych.",
 }
 
-export default function PolitykaPrywatnosciPage() {
+export default async function PolitykaPrywatnosciPage() {
+  const payload = await getPayload({ config })
+  const settings = await payload.findGlobal({
+    slug: "reservation-settings",
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  const hasPdf = Boolean(settings?.privacyPolicyPdf)
+
   return (
     <div className="px-4 pb-12 mt-10">
       <div className="mx-auto max-w-full">
@@ -19,14 +30,16 @@ export default function PolitykaPrywatnosciPage() {
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Polityka prywatności</h1>
             <p className="mt-1 text-sm text-muted-foreground">kregielnia-wielun.pl</p>
           </div>
-          <a
-            href="/documents/polityka-prywatnosci.pdf"
-            download
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[hsl(var(--brand))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--brand))] transition-colors hover:bg-[hsl(var(--brand-soft))]"
-          >
-            <Download className="h-4 w-4" />
-            Pobierz PDF
-          </a>
+          {hasPdf && (
+            <a
+              href="/api/privacy-policy"
+              download="polityka-prywatnosci.pdf"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[hsl(var(--brand))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--brand))] transition-colors hover:bg-[hsl(var(--brand-soft))]"
+            >
+              <Download className="h-4 w-4" />
+              Pobierz PDF
+            </a>
+          )}
         </div>
 
         {/* Treść */}
@@ -183,16 +196,18 @@ export default function PolitykaPrywatnosciPage() {
         </div>
 
         {/* Pobierz PDF — dół */}
-        <div className="mt-6 flex justify-center">
-          <a
-            href="/documents/polityka-prywatnosci.pdf"
-            download
-            className="inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--brand))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--brand))] transition-colors hover:bg-[hsl(var(--brand-soft))]"
-          >
-            <Download className="h-4 w-4" />
-            Pobierz politykę prywatności PDF
-          </a>
-        </div>
+        {hasPdf && (
+          <div className="mt-6 flex justify-center">
+            <a
+              href="/api/privacy-policy"
+              download="polityka-prywatnosci.pdf"
+              className="inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--brand))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--brand))] transition-colors hover:bg-[hsl(var(--brand-soft))]"
+            >
+              <Download className="h-4 w-4" />
+              Pobierz politykę prywatności PDF
+            </a>
+          </div>
+        )}
 
       </div>
     </div>
