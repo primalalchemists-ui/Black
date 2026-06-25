@@ -43,7 +43,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
           {/* linki */}
           <div className="flex flex-col gap-3 text-sm md:flex-row md:items-center md:gap-6">
             <a
-              href="/#informacje"
+              href="/dane-kontaktowe"
               className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Dane kontaktowe
@@ -57,18 +57,14 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
             </a>
 
             <a
-              href="/api/privacy-policy"
-              target="_blank"
-              rel="noreferrer"
+              href="/polityka-prywatnosci"
               className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Polityka prywatności
             </a>
 
             <a
-              href="/api/regulamin"
-              target="_blank"
-              rel="noreferrer"
+              href="/regulamin"
               className="text-sm text-muted-foreground underline hover:text-[hsl(var(--brand-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               Regulamin

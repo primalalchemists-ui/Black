@@ -468,7 +468,7 @@ export default function RezerwacjeBiznesPage() {
                         name="acceptPrivacyPolicy"
                         idPrefix="acceptPrivacyPolicy"
                         label="Akceptuję politykę prywatności"
-                        href="/api/privacy-policy"
+                        href="/polityka-prywatnosci"
                       />
 
                       <div className="grid gap-2">

@@ -26,6 +26,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# DATABASE_URL musi być dostępny jako build arg w Railway (Settings → Variables)
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
@@ -36,6 +40,16 @@ RUN \
   elif [ -f package-lock.json ]; then npm run build; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \
   else echo "Lockfile not found." && exit 1; \
+  fi
+
+# Uruchom migracje bazy danych podczas budowania obrazu
+# || true — build nie failuje jeśli migracje nie mogą się połączyć (np. lokalny build bez DB)
+RUN if [ -n "$DATABASE_URL" ]; then \
+    if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run migrate:deploy || true; \
+    elif [ -f package-lock.json ]; then npm run migrate:deploy || true; \
+    fi; \
+  else \
+    echo "DATABASE_URL not set — skipping migrations during build"; \
   fi
 
 # Production image, copy all the files and run next

@@ -35,7 +35,7 @@ export function AcceptRulesCard({
 
   name = "acceptRules",
   label = "Akceptuję regulamin obiektu",
-  href = "/api/regulamin",
+  href = "/regulamin",
   idPrefix = "acceptRules",
 }: Props) {
   const labelId = `${idPrefix}-label`
@@ -83,14 +83,14 @@ export function AcceptRulesCard({
                 </span>
 
                 <p id={descId} className="ml-2 text-sm text-muted-foreground">
-                  Dokument do pobrania:{" "}
+                  Dokument dostępny na stronie:{" "}
                   <a
-                    className="underline"
+                    className="underline hover:text-foreground"
                     href={href}
-                    download
+                    target="_blank"
                     rel="noopener noreferrer"
                   >
-                    pobierz PDF
+                    przeczytaj
                   </a>
                 </p>
 

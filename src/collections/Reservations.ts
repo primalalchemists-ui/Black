@@ -20,12 +20,7 @@ const minuteOptions = [
 function clampPartySize(n: unknown) {
   const x = typeof n === "number" ? n : Number(n);
   if (!Number.isFinite(x)) return 1;
-  return Math.min(12, Math.max(1, Math.floor(x)));
-}
-
-function tablesNeededFromPartySize(partySize: unknown) {
-  const ps = clampPartySize(partySize);
-  return Math.max(1, Math.ceil(ps / 4));
+  return Math.min(16, Math.max(1, Math.floor(x)));
 }
 
 /**
@@ -113,11 +108,11 @@ export const Reservations: CollectionConfig = {
           delete (data as any).disabilityDetails;
         }
 
-        // ✅ dla stolików: twardy limit + automatyczne tablesCount
+        // dla stolików: klampuj partySize, tablesCount = 1 (nie liczymy już per-stolik)
         if (type === "stolik") {
           const ps = clampPartySize((data as any).partySize ?? 1);
           (data as any).partySize = ps;
-          (data as any).tablesCount = tablesNeededFromPartySize(ps);
+          (data as any).tablesCount = 1;
         }
 
         // ===== USTAWIANIE startsAt/endsAt z UI pól (day + time) =====
@@ -367,7 +362,7 @@ export const Reservations: CollectionConfig = {
         if (siblingData?.type !== "stolik") return true;
         const ps = clampPartySize(val as any);
         if (ps < 1) return "Podaj liczbę osób.";
-        if (ps > 12) return "Maksymalnie 12 osób.";
+        if (ps > 16) return "Maksymalnie 16 osób na jedną rezerwację online.";
         return true;
       },
     },
@@ -378,7 +373,7 @@ export const Reservations: CollectionConfig = {
       admin: {
         condition: (_, s) => s?.type === "stolik",
         readOnly: true,
-        description: "Wyliczane automatycznie z liczby osób (1 stolik = 4 osoby).",
+        description: "Zawsze 1 dla rezerwacji online (tablesCount nie odzwierciedla fizycznych stolików).",
       },
       validate: (val, { siblingData }) => {
         if (siblingData?.type !== "stolik") return true;

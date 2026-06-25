@@ -406,7 +406,7 @@ export function ResourceGrid({
                     .join(" | ")}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Czas: {totalHours} h • Zasoby: {segments.length} • Cena: {formatPLN(totalPrice)}
+                  Czas: {totalHours} h • {type === "bilard" ? "Wybrane stoły" : type === "kregle" ? "Wybrane tory" : "Zasoby"}: {segments.length} • Cena: {formatPLN(totalPrice)}
                 </div>
               </div>
             )}

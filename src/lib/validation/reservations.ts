@@ -28,17 +28,27 @@ export const customerSchema = z.object({
 export const invoiceSchema = z
   .object({
     wantInvoice: z.boolean().default(false),
+    invoiceType: z.enum(["", "personal", "company"]).default(""),
     nip: z.string().trim().optional().or(z.literal("")),
   })
   .superRefine((val, ctx) => {
     if (val.wantInvoice) {
-      const res = nipPL.safeParse(val.nip ?? "");
-      if (!res.success) {
+      if (!val.invoiceType) {
         ctx.addIssue({
           code: "custom",
-          path: ["nip"],
-          message: "Podaj poprawny NIP (10 cyfr)",
+          path: ["invoiceType"],
+          message: "Wybierz rodzaj faktury",
         });
+      }
+      if (val.invoiceType === "company") {
+        const res = nipPL.safeParse(val.nip ?? "");
+        if (!res.success) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["nip"],
+            message: "Podaj poprawny NIP (10 cyfr)",
+          });
+        }
       }
     }
   });
@@ -94,7 +104,7 @@ export const tablesSchema = z
   .object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Wybierz poprawną datę"),
     hour: z.string().regex(/^\d{2}:\d{2}$/, "Wybierz godzinę"),
-    partySize: z.number().int().min(1, "Minimum 1 osoba").max(40, "Za dużo osób"),
+    partySize: z.number().int().min(1, "Minimum 1 osoba").max(16, "Maksymalnie 16 osób na jedną rezerwację online"),
     tablesCount: z.number().int().min(1),
     deposit: z.number().nonnegative(),
   })

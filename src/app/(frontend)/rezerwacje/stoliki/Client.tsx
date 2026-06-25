@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,8 +16,8 @@ import { WeekDateCards } from "@/components/reservations/WeekDateCards";
 import { InvoiceFields } from "@/components/reservations/InvoiceFields";
 import { ReservationStepper } from "@/components/reservations/ReservationStepper";
 import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
-import { formatPLN } from "@/components/reservations/money";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Info } from "lucide-react";
 
 import { tablesRequestSchema, type TablesRequest } from "@/lib/validation/reservations";
 
@@ -27,9 +27,55 @@ type AvailabilityResponse = {
   enabled: boolean;
   disabledMessage?: string | null;
   availableTablesCount: number;
-  tablesNeeded: number;
   slots: AvailabilitySlot[];
 };
+
+function InfoPopover({ message }: { message: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={ref}
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label="Informacja o limicie osób"
+        aria-expanded={open ? "true" : "false"}
+        className="inline-flex text-muted-foreground hover:text-foreground focus-visible:text-foreground outline-none transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        onFocus={() => setOpen(true)}
+      >
+        <Info className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div
+          role="tooltip"
+          className="absolute bottom-full left-1/2 z-50 mb-1.5 w-60 -translate-x-1/2 rounded-lg border bg-popover px-3 py-2.5 text-xs leading-relaxed text-popover-foreground shadow-md"
+        >
+          {message}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function clampPartySizeUI(raw: string) {
   const digitsOnly = raw.replace(/[^\d]/g, "");
@@ -38,7 +84,7 @@ function clampPartySizeUI(raw: string) {
   let n = Number(normalized);
   if (!Number.isFinite(n)) return "";
   if (n < 1) n = 1;
-  if (n > 12) n = 12;
+  if (n > 16) n = 16;
   return String(n);
 }
 
@@ -68,15 +114,8 @@ export default function RezerwacjeStolikiPage() {
 
   const partySizeForApi = useMemo(() => {
     const n = Math.max(1, partySizeNumber || 1);
-    return Math.min(12, n);
+    return Math.min(16, n);
   }, [partySizeNumber]);
-
-  const tablesNeeded = useMemo(() => {
-    const ps = Math.min(12, Math.max(1, Number(partySizeNumber || 1)));
-    return Math.ceil(ps / 4);
-  }, [partySizeNumber]);
-
-  const deposit = tablesNeeded > 1 ? 200 : 0;
 
   const selectedSlot = useMemo(() => {
     return availability?.slots?.find((s) => s.time === hour) ?? null;
@@ -103,8 +142,8 @@ export default function RezerwacjeStolikiPage() {
       date: day,
       hour,
       partySize: partySizeForApi,
-      tablesCount: tablesNeeded,
-      deposit,
+      tablesCount: 1,
+      deposit: 0,
 
       firstName: "",
       lastName: "",
@@ -113,6 +152,7 @@ export default function RezerwacjeStolikiPage() {
       notes: "",
 
       wantInvoice: false,
+      invoiceType: "" as "" | "personal" | "company",
       nip: "",
 
       acceptRules: false,
@@ -127,10 +167,8 @@ export default function RezerwacjeStolikiPage() {
     form.setValue("date", day);
     form.setValue("hour", hour);
     form.setValue("partySize", partySizeForApi);
-    form.setValue("tablesCount", tablesNeeded);
-    form.setValue("deposit", deposit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day, hour, partySizeForApi, tablesNeeded, deposit]);
+  }, [day, hour, partySizeForApi]);
 
   async function reloadAvailability(nextDay = day, nextParty = partySizeForApi, currentHour = hour) {
     setLoadingSlots(true);
@@ -146,7 +184,6 @@ export default function RezerwacjeStolikiPage() {
           enabled: true,
           disabledMessage: null,
           availableTablesCount: 0,
-          tablesNeeded,
           slots: [],
         });
         return;
@@ -208,7 +245,7 @@ export default function RezerwacjeStolikiPage() {
         <p>Rezerwacje odbywają się na zasadach określonych w Regulaminie obiektu.</p>
         <p>
           <a
-            href="/api/regulamin"
+            href="/regulamin"
             target="_blank"
             rel="noreferrer"
             className="underline transition-colors hover:text-foreground"
@@ -217,17 +254,6 @@ export default function RezerwacjeStolikiPage() {
           </a>
         </p>
       </ReservationRules>
-
-      {!isReservationsEnabled ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Rezerwacje wyłączone</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">{disabledMessage}</p>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {step === 1 ? (
         <Card>
@@ -274,13 +300,16 @@ export default function RezerwacjeStolikiPage() {
 
                   {selectedSlot ? (
                     <div className="text-sm text-muted-foreground">
-                      Dostępne stoliki: <span className="font-medium">{remainingNow}</span>
+                      Dostępne miejsca: <span className="font-medium">{remainingNow}</span>
                     </div>
                   ) : null}
                 </div>
 
                 <div className="grid gap-2 max-w-[240px]">
-                  <Label htmlFor="partySize">Liczba osób (max 12)</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="partySize">Liczba osób (max 16)</Label>
+                    <InfoPopover message="Rezerwacja stolika online możliwa jest dla maksymalnie 16 osób. W przypadku większych grup prosimy o kontakt z obsługą." />
+                  </div>
                   <Input
                     id="partySize"
                     type="text"
@@ -293,14 +322,6 @@ export default function RezerwacjeStolikiPage() {
                       else setPartySizeRaw(clampPartySizeUI(partySizeRaw) || "1");
                     }}
                   />
-                </div>
-
-                <div className="rounded-xl border p-4">
-                  <div className="text-sm text-muted-foreground">Podsumowanie</div>
-                  <div className="grid gap-1">
-                    <div className="font-medium">Stoliki: {tablesNeeded}</div>
-                    <div className="text-sm text-muted-foreground">1 stolik = 4 osoby • Zaliczka: {formatPLN(deposit)}</div>
-                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -350,15 +371,28 @@ export default function RezerwacjeStolikiPage() {
             </CardHeader>
 
             <CardContent className="grid gap-6">
-              <div className="rounded-xl border p-4">
-                <div className="text-sm text-muted-foreground">Podsumowanie</div>
-                <div className="font-medium">
-                  Stoliki • {day} • {hour} • Osób: {Math.min(12, Math.max(1, partySizeNumber || 1))} • Stoliki: {tablesNeeded}
+              <div className="rounded-xl border p-4 grid gap-3">
+                <p className="text-sm text-muted-foreground">Podsumowanie</p>
+                <div>
+                  <p className="font-semibold">Stoliki</p>
+                  <div className="mt-1.5 grid gap-0.5 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-muted-foreground w-28 shrink-0">Data</span>
+                      <span className="font-medium">{day.split("-").reverse().join(".")}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-muted-foreground w-28 shrink-0">Godzina</span>
+                      <span className="font-medium">{hour}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-muted-foreground w-28 shrink-0">Liczba osób</span>
+                      <span className="font-medium">{Math.min(16, Math.max(1, partySizeNumber || 1))}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">{deposit > 0 ? `Do zapłaty: ${formatPLN(deposit)}` : "Brak zaliczki."}</div>
-                <div className="text-sm text-muted-foreground">
-                  Dostępne stoliki: <span className="font-medium">{remainingNow}</span>
-                </div>
+                <p className="text-sm text-muted-foreground border-t pt-3">
+                  Rezerwacja stolika nie wymaga płatności online.
+                </p>
               </div>
 
               <CustomerFields register={form.register} errors={form.formState.errors} />
@@ -380,7 +414,7 @@ export default function RezerwacjeStolikiPage() {
                 name="acceptPrivacyPolicy"
                 idPrefix="acceptPrivacyPolicy"
                 label="Akceptuję politykę prywatności"
-                href="/api/privacy-policy"
+                href="/polityka-prywatnosci"
               />
 
               <div className="flex flex-wrap gap-2">
@@ -388,10 +422,14 @@ export default function RezerwacjeStolikiPage() {
                   Wróć
                 </Button>
 
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Wysyłam..." : "Wyślij rezerwację"}
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled>
+                  Zarezerwuj stolik
                 </Button>
               </div>
+
+              <p className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                Rezerwacje stolików uruchomimy wkrótce.
+              </p>
             </CardContent>
           </Card>
         </form>

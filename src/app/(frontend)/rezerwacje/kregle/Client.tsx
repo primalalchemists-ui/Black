@@ -130,6 +130,7 @@ export default function RezerwacjeKreglePage() {
       notes: "",
 
       wantInvoice: false,
+      invoiceType: "" as "" | "personal" | "company",
       nip: "",
 
       acceptRules: false,
@@ -214,9 +215,7 @@ export default function RezerwacjeKreglePage() {
         <p>Rezerwacje odbywają się na zasadach określonych w Regulaminie obiektu.</p>
         <p>
           <a
-            href="/api/regulamin"
-            target="_blank"
-            rel="noreferrer"
+            href="/regulamin"
             className="underline transition-colors hover:text-foreground"
           >
             Zobacz regulamin
@@ -278,24 +277,40 @@ export default function RezerwacjeKreglePage() {
 
             <CardContent className="grid gap-6">
               <div className="rounded-xl border p-4">
-                <div className="text-sm text-muted-foreground">Podsumowanie</div>
+                <p className="text-sm text-muted-foreground">Podsumowanie</p>
 
                 {grid.segments.length ? (
-                  <div className="grid gap-2">
-                    {grid.segments.map((s) => (
-                      <div key={`${s.resource}-${s.startHour}-${s.endHour}`} className="font-medium">
-                        Kręgle • {day} • Tor {s.resource} • {formatHHMMFromFloat(s.startHour)}–{formatHHMMFromFloat(s.endHour + 1)} •{" "}
-                        {formatPLN(s.price)}
-                      </div>
-                    ))}
+                  <div className="mt-3 grid gap-3">
+                    <div>
+                      <p className="font-semibold">Kręgle</p>
+                      <p className="text-sm text-muted-foreground">{day.split("-").reverse().join(".")}</p>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      {grid.segments.map((s) => (
+                        <div
+                          key={`${s.resource}-${s.startHour}-${s.endHour}`}
+                          className="flex items-baseline justify-between gap-2 text-sm"
+                        >
+                          <span className="font-medium">Tor {s.resource}: <span className="font-normal text-muted-foreground">{formatHHMMFromFloat(s.startHour)}–{formatHHMMFromFloat(s.endHour + 1)}</span></span>
+                          <span className="font-medium">{formatPLN(s.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="border-t pt-3 flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Do zapłaty</span>
+                      <span className="font-semibold">{formatPLN(payAmount)}</span>
+                    </div>
                   </div>
                 ) : (
-                  <div className="font-medium">
-                    Kręgle • {day} • {startLabel}–{endLabel} • Tory: {grid.resources.join(", ")}
+                  <div className="mt-2">
+                    <p className="font-medium">
+                      Kręgle • {day} • {startLabel}–{endLabel} • Wybrane tory: {grid.resources.length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Do zapłaty: {formatPLN(payAmount)}</p>
                   </div>
                 )}
-
-                <div className="text-sm text-muted-foreground">Do zapłaty: {formatPLN(payAmount)}</div>
               </div>
 
               {form.formState.errors?.root?.server?.message ? (
@@ -324,7 +339,7 @@ export default function RezerwacjeKreglePage() {
                 name="acceptPrivacyPolicy"
                 idPrefix="acceptPrivacyPolicy"
                 label="Akceptuję politykę prywatności"
-                href="/api/privacy-policy"
+                href="/polityka-prywatnosci"
               />
 
               <div className="flex flex-wrap gap-2">
@@ -332,10 +347,14 @@ export default function RezerwacjeKreglePage() {
                   Wróć
                 </Button>
 
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Wysyłam..." : `Rezerwuję i płacę ${formatPLN(payAmount)}`}
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled>
+                  Rezerwuję i płacę {formatPLN(payAmount)}
                 </Button>
               </div>
+
+              <p className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                Płatności online zostaną uruchomione wkrótce. W celu potwierdzenia rezerwacji prosimy o kontakt z obsługą.
+              </p>
             </CardContent>
           </Card>
         </form>

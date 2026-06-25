@@ -39,52 +39,52 @@ export const ReservationSettings: GlobalConfig = {
         {
           type: 'number',
           name: 'availableTablesCount',
-          label: 'Liczba stolików dostępnych do rezerwacji',
+          label: 'Limit miejsc dla rezerwacji online',
           required: true,
           defaultValue: 12,
           min: 0,
+          admin: {
+            description:
+              'Maksymalna liczba osób, które mogą mieć aktywną rezerwację online w tym samym czasie. To nie jest liczba fizycznych stolików.',
+          },
         },
 
-        /**
-         * Okno obciążenia (rolling window) dla stolików:
-         * liczymy zajętość jako sumę rezerwacji w oknie [T - before, T + after)
-         */
         {
           type: 'number',
           name: 'arrivalWindowBeforeMinutes',
-          label: 'Okno obciążenia – minuty wstecz (dla dostępności)',
-          defaultValue: 60,
+          label: 'Czas blokady rezerwacji stolika (minuty)',
+          defaultValue: 120,
           min: 0,
-          max: 240,
+          max: 480,
           admin: {
             description:
-              'Ile minut WSTECZ liczyć rezerwacje przy sprawdzaniu dostępności (np. 60).',
+              'Przez ile minut miejsca są blokowane po wybranej godzinie rezerwacji. Zalecane: 120.',
           },
         },
         {
           type: 'number',
           name: 'arrivalWindowAfterMinutes',
-          label: 'Okno obciążenia – minuty wprzód (dla dostępności)',
+          label: 'Okno obciążenia – minuty wprzód (nieużywane)',
           defaultValue: 0,
           min: 0,
           max: 240,
           admin: {
-            description:
-              'Ile minut WPRZÓD liczyć rezerwacje przy sprawdzaniu dostępności (np. 0 albo 30).',
+            hidden: true,
           },
         },
 
         {
           type: 'number',
           name: 'depositAmount',
-          label: 'Zaliczka za stoliki (PLN)',
+          label: 'Zaliczka za stoliki (PLN) – nieużywana',
           defaultValue: 200,
           min: 0,
+          admin: { hidden: true },
         },
         {
           type: 'number',
           name: 'depositFromTablesCount',
-          label: 'Zaliczka obowiązuje od ilu stolików',
+          label: 'Zaliczka obowiązuje od ilu osób',
           defaultValue: 2,
           min: 1,
         },

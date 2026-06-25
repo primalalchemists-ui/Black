@@ -399,7 +399,7 @@ export interface Reservation {
   endsAt?: string | null;
   partySize?: number | null;
   /**
-   * Wyliczane automatycznie z liczby osób (1 stolik = 4 osoby).
+   * Zawsze 1 dla rezerwacji online (tablesCount nie odzwierciedla fizycznych stolików).
    */
   tablesCount?: number | null;
   /**
@@ -1042,14 +1042,14 @@ export interface ReservationSetting {
      * Np. "Rezerwacje stolików są chwilowo wyłączone. Zadzwoń do nas."
      */
     disabledMessage?: string | null;
+    /**
+     * Maksymalna liczba osób, które mogą mieć aktywną rezerwację online w tym samym czasie. To nie jest liczba fizycznych stolików.
+     */
     availableTablesCount: number;
     /**
-     * Ile minut WSTECZ liczyć rezerwacje przy sprawdzaniu dostępności (np. 60).
+     * Przez ile minut miejsca są blokowane po wybranej godzinie rezerwacji. Zalecane: 120.
      */
     arrivalWindowBeforeMinutes?: number | null;
-    /**
-     * Ile minut WPRZÓD liczyć rezerwacje przy sprawdzaniu dostępności (np. 0 albo 30).
-     */
     arrivalWindowAfterMinutes?: number | null;
     depositAmount?: number | null;
     depositFromTablesCount?: number | null;

@@ -15,7 +15,7 @@ const issue = (path: Issue["path"], message: string): Issue => ({ path, message 
 
 function clampPartySize(n: number) {
   if (!Number.isFinite(n)) return 1;
-  return Math.min(12, Math.max(1, Math.floor(n)));
+  return Math.min(16, Math.max(1, Math.floor(n)));
 }
 
 function isQuarterHour(timeStr: string) {
@@ -119,11 +119,18 @@ async function getOpeningHours(payload: any): Promise<OpeningHour[]> {
 type SlotOut = { time: string; remaining: number; canBook: boolean };
 
 /**
- * Rolling-window: liczymy zajętość na slot T jako sumę rezerwacji startujących w oknie [T-before, T+after)
+ * Liczy sumę partySize rezerwacji, które nakładają się czasowo z nowym slotem S.
+ *
+ * Nowa rezerwacja: [S, S + blockDuration)
+ * Istniejąca:     [T, T + blockDuration)
+ * Overlap: T < S + blockDuration AND T + blockDuration > S
+ *       ↔  S - blockDuration < T < S + blockDuration  (strict na obu krańcach)
+ *
+ * Granice wyłączne: rezerwacja kończąca się dokładnie o S (T + D = S) nie blokuje.
  */
-function takenTablesInWindow(existingDocs: any[], slotM: number, before: number, after: number) {
-  const from = slotM - before;
-  const to = slotM + after;
+function takenSeatsInWindow(existingDocs: any[], slotM: number, blockDurationMinutes: number) {
+  const from = slotM - blockDurationMinutes; // exclusive
+  const to   = slotM + blockDurationMinutes; // exclusive
 
   let taken = 0;
   for (const r of existingDocs || []) {
@@ -132,8 +139,8 @@ function takenTablesInWindow(existingDocs: any[], slotM: number, before: number,
     if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
 
     const startM = hh * 60 + mm;
-    if (startM >= from && startM < to) {
-      taken += Number((r as any).tablesCount) || 0;
+    if (startM > from && startM < to) {
+      taken += Number((r as any).partySize) || 0;
     }
   }
   return taken;
@@ -155,18 +162,15 @@ export async function GET(req: Request) {
 
   const enabled = Boolean(t?.enabled);
   const disabledMessage = t?.disabledMessage ?? null;
-  const availableTablesCount = Number(t?.availableTablesCount ?? 0);
-  const tablesNeeded = Math.max(1, Math.ceil(partySize / 4));
+  const onlineSeatsLimit = Number(t?.availableTablesCount ?? 0);
+  const blockDuration = Number(t?.arrivalWindowBeforeMinutes ?? 120);
 
   if (!enabled) {
-    return NextResponse.json({ ok: true, enabled, disabledMessage, availableTablesCount, tablesNeeded, slots: [] });
+    return NextResponse.json({ ok: true, enabled, disabledMessage, availableTablesCount: onlineSeatsLimit, slots: [] });
   }
 
   const latestBeforeClose = Number(t?.latestReservationStartBeforeClosingMinutes ?? 0);
   const afterOpen = Number(t?.reservationStartAfterOpeningMinutes ?? 0);
-
-  const windowBefore = Number(t?.arrivalWindowBeforeMinutes ?? 60);
-  const windowAfter = Number(t?.arrivalWindowAfterMinutes ?? 0);
 
   const openingHours = await getOpeningHours(payload);
 
@@ -214,14 +218,12 @@ export async function GET(req: Request) {
   for (const time of slots) {
     const slotM = minutesFromHHMM(time);
 
-    // rolling window zamiast prefix-sum
-    const taken = takenTablesInWindow(existing?.docs || [], slotM, windowBefore, windowAfter);
-    const remaining = Math.max(0, availableTablesCount - taken);
+    const taken = takenSeatsInWindow(existing?.docs || [], slotM, blockDuration);
+    const remaining = Math.max(0, onlineSeatsLimit - taken);
 
-    // ✅ nie pokazuj jako dostępne godzin, które już minęły dziś
     const timePassed = isToday ? slotM <= nowM : false;
 
-    const canBook = !timePassed && remaining >= tablesNeeded && availableTablesCount > 0;
+    const canBook = !timePassed && remaining >= partySize && onlineSeatsLimit > 0;
 
     out.push({ time, remaining, canBook });
   }
@@ -230,13 +232,8 @@ export async function GET(req: Request) {
     ok: true,
     enabled,
     disabledMessage,
-    availableTablesCount,
-    tablesNeeded,
+    availableTablesCount: onlineSeatsLimit,
     slots: out,
-    policy: {
-      arrivalWindowBeforeMinutes: windowBefore,
-      arrivalWindowAfterMinutes: windowAfter,
-    },
   });
 }
 
@@ -275,16 +272,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const available = Number(t?.availableTablesCount ?? 0);
-    if (available <= 0) {
+    const onlineSeatsLimit = Number(t?.availableTablesCount ?? 0);
+    if (onlineSeatsLimit <= 0) {
       return NextResponse.json(
-        { error: "NO_AVAILABILITY", issues: [issue(["tablesCount"], "Brak dostępnych stolików.")] },
+        { error: "NO_AVAILABILITY", issues: [issue(["partySize"], "Brak dostępnych miejsc online.")] },
         { status: 409 }
       );
     }
 
-    const windowBefore = Number(t?.arrivalWindowBeforeMinutes ?? 60);
-    const windowAfter = Number(t?.arrivalWindowAfterMinutes ?? 0);
+    const blockDuration = Number(t?.arrivalWindowBeforeMinutes ?? 120);
 
     const dateOnly = String((data as any).date || "");
     const time = String((data as any).hour || "");
@@ -313,7 +309,6 @@ export async function POST(req: Request) {
     }
 
     const partySize = clampPartySize(Number((data as any).partySize || 1));
-    const requestedTables = Math.max(1, Math.ceil(partySize / 4));
 
     const latestBeforeClose = Number(t?.latestReservationStartBeforeClosingMinutes ?? 0);
     const afterOpen = Number(t?.reservationStartAfterOpeningMinutes ?? 0);
@@ -350,13 +345,12 @@ export async function POST(req: Request) {
 
     const slotM = minutesFromHHMM(time);
 
-    // ✅ rolling window zamiast "od startu do końca dnia"
-    const taken = takenTablesInWindow(existing?.docs || [], slotM, windowBefore, windowAfter);
-    const remaining = Math.max(0, available - taken);
+    const taken = takenSeatsInWindow(existing?.docs || [], slotM, blockDuration);
+    const remaining = Math.max(0, onlineSeatsLimit - taken);
 
-    if (requestedTables > remaining) {
+    if (partySize > remaining) {
       return NextResponse.json(
-        { error: "NO_AVAILABILITY", issues: [issue(["tablesCount"], "Brak dostępnych stolików na wybrany termin.")] },
+        { error: "NO_AVAILABILITY", issues: [issue(["partySize"], "Brak wystarczającej liczby miejsc na wybrany termin.")] },
         { status: 409 }
       );
     }
@@ -366,10 +360,10 @@ export async function POST(req: Request) {
     const startHour = String(h);
     const startMinute = String(m);
 
-    // startsAt/endsAt pomocniczo (+60). Uwaga: to używa TZ serwera.
+    // startsAt/endsAt: blokada na blockDuration minut. Uwaga: to używa TZ serwera.
     const startsAt = new Date(dateOnly + "T" + time + ":00");
     const endsAt = new Date(startsAt);
-    endsAt.setMinutes(endsAt.getMinutes() + 60);
+    endsAt.setMinutes(endsAt.getMinutes() + blockDuration);
 
     const endHour = String(endsAt.getHours());
     const endMinute = String(endsAt.getMinutes());
@@ -397,7 +391,7 @@ export async function POST(req: Request) {
         endsAt: endsAt.toISOString(),
 
         partySize,
-        tablesCount: requestedTables,
+        tablesCount: 1,
 
         invoice: { wantInvoice: (data as any).wantInvoice, nip: (data as any).nip || "" },
         acceptRules: Boolean((data as any).acceptRules),

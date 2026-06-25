@@ -81,6 +81,7 @@ export default function RezerwacjeBiznesPage() {
       notes: "",
 
       wantInvoice: false,
+      invoiceType: "" as "" | "personal" | "company",
       nip: "",
 
       acceptRules: false,
@@ -422,7 +423,7 @@ export default function RezerwacjeBiznesPage() {
                 name="acceptPrivacyPolicy"
                 idPrefix="acceptPrivacyPolicy"
                 label="Akceptuję politykę prywatności"
-                href="/api/privacy-policy"
+                href="/polityka-prywatnosci"
               />
 
               <div className="flex flex-wrap gap-2">
