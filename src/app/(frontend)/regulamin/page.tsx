@@ -46,8 +46,8 @@ export default async function RegulaminPage() {
 
         {/* Dane przedsiębiorcy */}
         <div className="mb-6 rounded-xl border bg-muted/40 px-5 py-4 text-sm">
-          <p className="font-semibold text-foreground">P.P.H.U. „ANDREA" Andrzej Kamiński</p>
-          <p className="text-muted-foreground">Centrum Rozrywkowe „BLACK"</p>
+          <p className="font-semibold text-foreground">P.P.H.U. „ANDREA" ANDRZEJ KAMIŃSKI</p>
+          <p className="text-muted-foreground">Ośrodek „Zacisze" · Centrum Rozrywkowe „BLACK"</p>
           <div className="mt-2 space-y-0.5 text-muted-foreground">
             <p>Sieradzka 28A, 98-300 Wieluń</p>
             <p>NIP: 8321002917</p>

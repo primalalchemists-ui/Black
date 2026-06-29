@@ -22,8 +22,8 @@ export default function DaneKontaktowePage() {
         <div className="rounded-2xl border bg-card px-6 py-8 md:px-10">
 
           <div className="mb-6 border-b border-border/60 pb-6">
-            <p className="text-lg font-semibold text-foreground">P.P.H.U. „ANDREA" Andrzej Kamiński</p>
-            <p className="text-muted-foreground">Centrum Rozrywkowe „BLACK"</p>
+            <p className="text-lg font-semibold text-foreground">P.P.H.U. „ANDREA" ANDRZEJ KAMIŃSKI</p>
+            <p className="text-muted-foreground">Ośrodek „Zacisze" · Centrum Rozrywkowe „BLACK"</p>
           </div>
 
           <div className="space-y-4">

@@ -1,4 +1,4 @@
-const ADDRESS = "Sieradzka 28, 98-300 Wieluń";
+const ADDRESS = "Sieradzka 28A, 98-300 Wieluń";
 
 function renderPriceLine(pricePLN: number | null | undefined) {
   if (pricePLN == null || Number(pricePLN) === 0) {

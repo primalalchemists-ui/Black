@@ -70,7 +70,7 @@ export default async function PolitykaPrywatnosciPage() {
             <p className="mb-3 text-foreground/80">Administratorem danych osobowych jest:</p>
             <div className="rounded-xl border bg-muted/40 px-5 py-4 text-sm">
               <p className="font-semibold text-foreground">P.P.H.U. „ANDREA" ANDRZEJ KAMIŃSKI</p>
-              <p className="text-muted-foreground">CENTRUM ROZRYWKOWE „BLACK"</p>
+              <p className="text-muted-foreground">Ośrodek „Zacisze" · Centrum Rozrywkowe „BLACK"</p>
               <div className="mt-2 space-y-0.5 text-muted-foreground">
                 <p>Sieradzka 28A, 98-300 Wieluń</p>
                 <p>
