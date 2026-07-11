@@ -189,7 +189,15 @@ export default function RezerwacjeKreglePage() {
           return;
         }
 
-        const msg = parsed?.message ?? parsed?.error ?? (raw?.slice(0, 600) ? raw.slice(0, 600) : `HTTP ${res.status}`);
+        const ERROR_PL: Record<string, string> = {
+          NO_AVAILABILITY: "Brak dostępności na wybrany termin. Wybierz inny czas lub tor.",
+          VENUE_BLOCKED: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie.",
+          RESERVATIONS_DISABLED: "Rezerwacje są chwilowo wyłączone.",
+          PAST_TIME: "Nie można rezerwować godzin, które już minęły.",
+          BAD_DATE: "Niepoprawna data rezerwacji.",
+          PAYMENT_ERROR: "Nie udało się przetworzyć płatności. Skontaktuj się z obsługą lokalu: 601 275 261.",
+        }
+        const msg = parsed?.message ?? ERROR_PL[parsed?.error] ?? "Wystąpił błąd. Spróbuj ponownie.";
         form.setError("root.server" as any, { type: "server", message: msg });
         return;
       }
