@@ -3,6 +3,9 @@ import * as migration_20260106_214915 from './20260106_214915';
 import * as migration_20260111_183413 from './20260111_183413';
 import * as migration_20260528_fix_privacy_policy_pdf_column from './20260528_fix_privacy_policy_pdf_column';
 import * as migration_20260621_add_nip_to_site_settings from './20260621_add_nip_to_site_settings';
+import * as migration_20260705_add_reservation_number from './20260705_add_reservation_number';
+import * as migration_20260708_add_event_type_fields from './20260708_add_event_type_fields';
+import * as migration_20260708_fix_events_kind from './20260708_fix_events_kind';
 
 export const migrations = [
   {
@@ -29,5 +32,20 @@ export const migrations = [
     up: migration_20260621_add_nip_to_site_settings.up,
     down: migration_20260621_add_nip_to_site_settings.down,
     name: '20260621_add_nip_to_site_settings',
+  },
+  {
+    up: migration_20260705_add_reservation_number.up,
+    down: migration_20260705_add_reservation_number.down,
+    name: '20260705_add_reservation_number',
+  },
+  {
+    up: migration_20260708_add_event_type_fields.up,
+    down: migration_20260708_add_event_type_fields.down,
+    name: '20260708_add_event_type_fields',
+  },
+  {
+    up: migration_20260708_fix_events_kind.up,
+    down: migration_20260708_fix_events_kind.down,
+    name: '20260708_fix_events_kind',
   },
 ];

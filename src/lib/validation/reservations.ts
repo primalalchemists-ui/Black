@@ -124,6 +124,7 @@ export const tablesSchema = z
 export const businessSchema = z
   .object({
     eventId: z.string().min(1, "Wybierz wydarzenie"),
+    partySize: z.number({ invalid_type_error: "Podaj liczbę osób" }).int().min(1, "Minimalna liczba osób: 1").optional().default(1),
     disabledPerson: z.boolean().default(false),
     disabilityDetails: z.string().trim().optional().or(z.literal("")),
   })
@@ -138,6 +139,11 @@ export const businessSchema = z
       }
     }
   });
+
+export const imprezaSchema = z.object({
+  eventId: z.string().min(1, "Wybierz imprezę"),
+  partySize: z.number({ invalid_type_error: "Podaj liczbę osób" }).int().min(1, "Minimalna liczba osób: 1"),
+});
 
 /** request schemas
  * ✅ TS FIX: składamy schemy przez .merge(), a nie przez rozsypywanie .shape
@@ -178,6 +184,15 @@ export const businessRequestSchema = z
   .merge(acceptDocumentsSchema);
 
 export type BusinessRequest = z.infer<typeof businessRequestSchema>;
+
+export const imprezaRequestSchema = z
+  .object({ type: z.literal("impreza") })
+  .merge(imprezaSchema)
+  .merge(customerSchema)
+  .merge(invoiceSchema)
+  .merge(acceptDocumentsSchema);
+
+export type ImprezaRequest = z.infer<typeof imprezaRequestSchema>;
 
 /** union */
 export const reservationCreateRequestSchema = z.discriminatedUnion("type", [

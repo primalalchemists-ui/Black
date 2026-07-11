@@ -7,7 +7,6 @@ const hourOptions = Array.from({ length: 24 }, (_, h) => ({
   value: String(h),
 }))
 
-// wybierz krok minutowy jaki chcesz: 0/15/30/45
 const minuteOptions = [
   { label: '00', value: '0' },
   { label: '15', value: '15' },
@@ -32,6 +31,13 @@ export const Events: CollectionConfig = {
     group: 'Treści strony',
     useAsTitle: 'title',
     defaultColumns: ['title', 'startsAt', 'kind', 'status'],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/EventsListView#EventsListView',
+        },
+      },
+    },
   },
   access: {
     read: () => true,
@@ -41,6 +47,35 @@ export const Events: CollectionConfig = {
   },
 
   hooks: {
+    afterRead: [
+      async ({ doc, req, findMany, context }) => {
+        if (findMany) return doc
+        if ((context as any)?.skipTakenSeats) return doc
+        if (!req?.payload) return doc
+        try {
+          const result = await req.payload.find({
+            collection: 'reservations',
+            limit: 5000,
+            pagination: false,
+            overrideAccess: true,
+            depth: 0,
+            where: {
+              and: [
+                { event: { equals: doc.id } },
+                { status: { in: ['new', 'confirmed'] } },
+              ],
+            },
+          })
+          const takenSeats = (result.docs as any[]).reduce(
+            (sum: number, r: any) => sum + (Number(r.partySize) || 0),
+            0,
+          )
+          return { ...doc, takenSeats }
+        } catch {
+          return doc
+        }
+      },
+    ],
     beforeValidate: [
       ({ data }) => {
         if (!data) return data
@@ -48,39 +83,26 @@ export const Events: CollectionConfig = {
         if (data.day) {
           const day = data.day as any
 
-          if (data.allDay) {
-            const start = new Date(day)
-            start.setHours(0, 0, 0, 0)
+          const startHour = String(data.startHour ?? '0')
+          const startMinute = String(data.startMinute ?? '0')
 
-            const end = new Date(day)
-            end.setHours(23, 59, 59, 999)
+          const endHour = data.endHour != null ? String(data.endHour) : ''
+          const endMinute = data.endMinute != null ? String(data.endMinute) : ''
 
-            data.startsAt = start.toISOString()
+          data.startsAt = buildDateTimeFromDayHourMinute(day, startHour, startMinute)
+
+          if (endHour !== '' && endMinute !== '') {
+            const start = new Date(data.startsAt)
+            let end = new Date(buildDateTimeFromDayHourMinute(day, endHour, endMinute))
+
+            // Handle overnight events — if end is not after start, push to next day
+            if (end <= start) {
+              end = new Date(end.getTime() + 24 * 60 * 60 * 1000)
+            }
+
             data.endsAt = end.toISOString()
           } else {
-            const startHour = String(data.startHour ?? '0')
-            const startMinute = String(data.startMinute ?? '0')
-
-            const endHour = data.endHour != null ? String(data.endHour) : ''
-            const endMinute = data.endMinute != null ? String(data.endMinute) : ''
-
-            data.startsAt = buildDateTimeFromDayHourMinute(day, startHour, startMinute)
-
-            // endsAt opcjonalne — liczymy tylko jeśli oba pola końca są podane
-            if (endHour !== '' && endMinute !== '') {
-              const endsAtIso = buildDateTimeFromDayHourMinute(day, endHour, endMinute)
-
-              const start = new Date(data.startsAt)
-              const end = new Date(endsAtIso)
-
-              if (end <= start) {
-                throw new Error('Czas „Koniec” musi być późniejszy niż „Start”.')
-              }
-
-              data.endsAt = endsAtIso
-            } else {
-              data.endsAt = undefined
-            }
+            data.endsAt = undefined
           }
         }
 
@@ -95,25 +117,21 @@ export const Events: CollectionConfig = {
 
     {
       name: 'kind',
-      label: 'Typ',
+      label: 'Typ wydarzenia',
       type: 'select',
-      required: true,
       options: [
-        { label: 'Promocja', value: 'promo' },
-        { label: 'Biznes', value: 'business' },
-        { label: 'Impreza', value: 'party' },
-        { label: 'Sport', value: 'sport' },
+        { label: 'Impreza', value: 'impreza' },
+        { label: 'Biznes', value: 'biznes' },
       ],
-      defaultValue: 'promo',
     },
 
     {
-      name: "pricePLN",
-      label: "Cena (PLN)",
-      type: "number",
+      name: 'pricePLN',
+      label: 'Cena (PLN)',
+      type: 'number',
       min: 0,
       admin: {
-        description: "Opcjonalne. Ustaw np. dla wydarzeń biznesowych lub biletowanych. 0 = darmowe.",
+        description: 'Dla darmowych wydarzeń ustaw 0.',
       },
     },
 
@@ -129,16 +147,12 @@ export const Events: CollectionConfig = {
       defaultValue: 'planned',
     },
 
-    // === UI: dzień + czas ===
     {
       name: 'day',
       label: 'Dzień',
       type: 'date',
       required: true,
-      admin: { description: 'Wybierz dzień wydarzenia. Godzinę i minutę ustawisz poniżej.' },
     },
-    { name: 'allDay', label: 'Całodniowe', type: 'checkbox', defaultValue: false },
-
     {
       name: 'startHour',
       label: 'Start (godzina)',
@@ -146,7 +160,6 @@ export const Events: CollectionConfig = {
       required: true,
       options: hourOptions,
       defaultValue: '18',
-      admin: { condition: (_, s) => !s?.allDay },
     },
     {
       name: 'startMinute',
@@ -155,7 +168,6 @@ export const Events: CollectionConfig = {
       required: true,
       options: minuteOptions,
       defaultValue: '0',
-      admin: { condition: (_, s) => !s?.allDay },
     },
 
     {
@@ -164,7 +176,6 @@ export const Events: CollectionConfig = {
       type: 'select',
       required: false,
       options: hourOptions,
-      admin: { condition: (_, s) => !s?.allDay },
     },
     {
       name: 'endMinute',
@@ -172,37 +183,20 @@ export const Events: CollectionConfig = {
       type: 'select',
       required: false,
       options: minuteOptions,
-      admin: { condition: (_, s) => !s?.allDay },
       validate: (val, { siblingData }) => {
-        if (siblingData?.allDay) return true
-
         const endHour = siblingData?.endHour
         const endMinute = val
 
-        // koniec opcjonalny: oba muszą być ustawione albo oba puste
         const endHourEmpty = endHour == null || endHour === ''
         const endMinuteEmpty = endMinute == null || endMinute === ''
 
         if (endHourEmpty && endMinuteEmpty) return true
         if (endHourEmpty !== endMinuteEmpty) return 'Ustaw zarówno godzinę, jak i minutę końca.'
 
-        // jeśli oba są, porównujemy start vs end
-        const day = siblingData?.day
-        if (!day) return true
-
-        const startIso = buildDateTimeFromDayHourMinute(
-          day,
-          String(siblingData?.startHour ?? '0'),
-          String(siblingData?.startMinute ?? '0'),
-        )
-        const endIso = buildDateTimeFromDayHourMinute(day, String(endHour), String(endMinute))
-
-        if (new Date(endIso) <= new Date(startIso)) return 'Czas „Koniec” musi być późniejszy niż „Start”.'
         return true
       },
     },
 
-    // === TECHNICZNE DATY (hidden) ===
     {
       name: 'startsAt',
       label: 'Start (timestamp)',
@@ -217,6 +211,28 @@ export const Events: CollectionConfig = {
       admin: { readOnly: true, hidden: true },
     },
 
+    {
+      name: 'showOnHomepage',
+      label: 'Pokaż na stronie głównej',
+      type: 'checkbox',
+      defaultValue: false,
+    },
+    {
+      name: 'blocksVenue',
+      label: 'Blokuje lokal',
+      type: 'checkbox',
+      defaultValue: false,
+    },
+    {
+      name: 'blockAllDay',
+      label: 'Blokada całodniowa',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        condition: (_, siblingData) => Boolean(siblingData?.blocksVenue),
+      },
+    },
+
     { name: 'image', label: 'Zdjęcie', type: 'upload', relationTo: 'media' },
 
     { name: 'capacity', label: 'Limit miejsc', type: 'number' },
@@ -228,5 +244,16 @@ export const Events: CollectionConfig = {
     },
 
     { name: 'published', label: 'Opublikowane', type: 'checkbox', defaultValue: true },
+
+    {
+      name: 'takenSeats',
+      label: 'Zapisanych osób',
+      type: 'number',
+      virtual: true,
+      admin: {
+        readOnly: true,
+        position: 'sidebar',
+      },
+    },
   ],
 }

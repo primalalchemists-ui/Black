@@ -101,3 +101,23 @@ export function isSlotBookableWithLeadTime(
   // dzisiaj w Warsaw
   return slotHour * 60 + slotMinute >= now.totalMinutes + leadMinutes;
 }
+
+/**
+ * Pobiera kolejny numer rezerwacji z sekwencji PostgreSQL.
+ * Format: BLACK-[K/B/S/W]-000001
+ * Bezpieczne przy równoległych żądaniach (sekwencja atomowa).
+ */
+export async function getNextReservationNumber(
+  payloadInstance: any,
+  typeCode: "K" | "B" | "S" | "W" | "I",
+): Promise<string> {
+  const pool = (payloadInstance.db as any)?.pool;
+  if (!pool?.query) throw new Error("[reservationNumber] Brak dostępu do puli DB (pool.query)");
+  // Utwórz sekwencję jeśli nie istnieje (idempotentne)
+  await pool.query(
+    "CREATE SEQUENCE IF NOT EXISTS reservation_number_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1"
+  );
+  const result = await pool.query("SELECT nextval('reservation_number_seq') AS val");
+  const seq = Number(result.rows[0].val);
+  return `BLACK-${typeCode}-${String(seq).padStart(6, "0")}`;
+}

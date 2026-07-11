@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { ReservationRules } from "@/components/reservations/ReservationRules";
 import { CustomerFields } from "@/components/reservations/CustomerFields";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { InvoiceFields } from "@/components/reservations/InvoiceFields";
@@ -20,9 +21,11 @@ import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
 import { ErrorSlot } from "@/components/forms/ErrorSlot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays } from "lucide-react";
+import { ServerErrorMessage } from "@/components/reservations/ServerErrorMessage";
 
 import { businessRequestSchema, type BusinessRequest } from "@/lib/validation/reservations";
 import { fetchEventsByKind, getEventDisplayDateTimePL, renderPricePLN, type CmsEvent } from "@/lib/cms/events";
+import { formatPLN } from "@/components/reservations/money";
 
 type EventItem = {
   id: string;
@@ -30,7 +33,9 @@ type EventItem = {
   dateLabel: string;
   timeLabel: string;
   priceLabel: string | null;
+  pricePLN: number | null;
   capacityLabel: string | null;
+  takenSeats: number | null;
 };
 
 function mapBusinessEventToItem(e: CmsEvent): EventItem {
@@ -41,7 +46,9 @@ function mapBusinessEventToItem(e: CmsEvent): EventItem {
     dateLabel: dt?.date ?? "—",
     timeLabel: dt?.time ?? "—",
     priceLabel: renderPricePLN(e.pricePLN),
+    pricePLN: typeof e.pricePLN === "number" ? e.pricePLN : null,
     capacityLabel: typeof e.capacity === "number" ? String(e.capacity) : null,
+    takenSeats: typeof e.takenSeats === "number" ? e.takenSeats : null,
   };
 }
 
@@ -53,23 +60,32 @@ function parseCapacity(capacityLabel: string | null): number | null {
 
 export default function RezerwacjeBiznesPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [fetchedOnce, setFetchedOnce] = useState(false);
   const [eventId, setEventId] = useState<string>("");
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const event = useMemo(() => events.find((e) => e.id === eventId) ?? null, [events, eventId]);
 
-  const capacityNum = useMemo(() => parseCapacity(event?.capacityLabel ?? null), [event?.capacityLabel]);
-  const isSoldOut = capacityNum !== null && capacityNum <= 0;
+  const capacityNum = useMemo(() => parseCapacity(event?.capacityLabel ?? null), [event]);
+  const spotsLeft = useMemo(() => {
+    if (capacityNum === null) return null;
+    const taken = event?.takenSeats ?? null;
+    if (taken === null) return null;
+    return Math.max(0, capacityNum - taken);
+  }, [capacityNum, event]);
+  const isSoldOut = spotsLeft !== null && spotsLeft <= 0;
 
   const form = useForm<BusinessRequest>({
     resolver: zodResolver(businessRequestSchema),
     defaultValues: {
       type: "biznes",
       eventId: "",
+      partySize: 1,
 
       disabledPerson: false,
       disabilityDetails: "",
@@ -95,7 +111,7 @@ export default function RezerwacjeBiznesPage() {
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
     try {
-      const cmsEvents = await fetchEventsByKind("business");
+      const cmsEvents = await fetchEventsByKind("biznes");
       const fetched = cmsEvents.map(mapBusinessEventToItem);
       setEvents(fetched);
       return fetched;
@@ -130,8 +146,10 @@ export default function RezerwacjeBiznesPage() {
       const preferredExists = preferred ? fetched.some((e) => e.id === preferred) : false;
 
       const firstWithSeats = fetched.find((e) => {
-        const c = parseCapacity(e.capacityLabel);
-        return c === null ? true : c > 0;
+        const cap = parseCapacity(e.capacityLabel);
+        if (cap === null) return true;
+        const left = e.takenSeats != null ? Math.max(0, cap - e.takenSeats) : cap;
+        return left > 0;
       });
 
       setEventId(preferredExists ? (preferred as string) : (firstWithSeats?.id ?? fetched[0]!.id));
@@ -155,67 +173,66 @@ export default function RezerwacjeBiznesPage() {
   }, [eventId]);
 
   async function onSubmit(values: BusinessRequest) {
+    setServerError(null);
+
     if (isSoldOut) {
       form.setError("eventId" as any, { type: "server", message: "Koniec miejsc na to wydarzenie." });
       return;
     }
 
-    const res = await fetch("/api/reservations/biznes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => null);
-      console.log("BIZNES API ERROR:", err);
-
-      if (err?.error === "VALIDATION_ERROR" && Array.isArray(err.issues)) {
-        for (const issue of err.issues) {
-          const path = issue.path?.[0];
-          if (path) form.setError(path as any, { type: "server", message: issue.message });
-        }
-        return;
-      }
-
-      if (err?.error === "NO_AVAILABILITY") {
-        form.setError("eventId" as any, { type: "server", message: "Koniec miejsc na to wydarzenie." });
-        await loadEvents();
-        return;
-      }
-
-      alert(err?.message ?? "Wystąpił błąd. Spróbuj ponownie.");
-      return;
-    }
-
-    const refreshed = await loadEvents();
-
-    const current = refreshed.find((e) => e.id === eventId) ?? null;
-    const currentCap = parseCapacity(current?.capacityLabel ?? null);
-    if (current && currentCap !== null && currentCap <= 0) {
-      const firstWithSeats = refreshed.find((e) => {
-        const c = parseCapacity(e.capacityLabel);
-        return c === null ? true : c > 0;
+    try {
+      const res = await fetch("/api/reservations/biznes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
       });
-      if (firstWithSeats) setEventId(firstWithSeats.id);
-    }
 
-    setStep(3);
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (json?.error === "VALIDATION_ERROR" && Array.isArray(json.issues)) {
+          for (const issue of json.issues) {
+            const path = issue.path?.[0];
+            if (path) form.setError(path as any, { type: "server", message: issue.message });
+          }
+          return;
+        }
+
+        if (json?.error === "NO_AVAILABILITY") {
+          setServerError(json?.message ?? "Brak dostępności na to wydarzenie.");
+          await loadEvents();
+          return;
+        }
+
+        setServerError(json?.message ?? "Wystąpił błąd. Spróbuj ponownie.");
+        return;
+      }
+
+      if (json?.redirectUrl) {
+        window.location.href = String(json.redirectUrl);
+        return;
+      }
+
+      const groupId = json?.groupId ?? "";
+      router.push(`/rezerwacje/podziekowanie?sessionId=${encodeURIComponent(groupId)}`);
+    } catch {
+      setServerError("Błąd połączenia. Sprawdź internet i spróbuj ponownie.");
+    }
   }
 
   const disabledPerson = Boolean(form.watch("disabledPerson"));
+  const watchedPartySize = form.watch("partySize");
+  const totalPLN = (event?.pricePLN ?? 0) * Math.max(1, watchedPartySize || 1);
   const hasBusinessEvents = events.length > 0;
+
+  const maxPartySize = spotsLeft ?? capacityNum ?? 999;
+  const { ref: partySizeRef, name: partySizeName, onChange: partySizeChange, onBlur: partySizeBlur } = form.register("partySize", { valueAsNumber: true });
 
   const isGatedLoading = !fetchedOnce || loadingEvents;
 
   return (
     <div className="grid gap-6">
       <ReservationStepper step={step} />
-
-      <ReservationRules title="Zapisy na wydarzenia biznesowe">
-        <p>Płatność na miejscu.</p>
-        <p>Limit miejsc zależy od wydarzenia.</p>
-      </ReservationRules>
 
       {step === 1 ? (
         <Card>
@@ -229,7 +246,7 @@ export default function RezerwacjeBiznesPage() {
               animate={{ opacity: isGatedLoading ? 0 : 1 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
               style={{ pointerEvents: isGatedLoading ? "none" : "auto" }}
-              className="grid gap-4"
+              className="grid gap-4 max-w-[520px] mx-auto"
             >
               {!hasBusinessEvents ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center" role="status" aria-live="polite">
@@ -241,8 +258,7 @@ export default function RezerwacjeBiznesPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-2 max-w-[520px]">
-                    <Label htmlFor="eventSelect">Wybierz wydarzenie</Label>
+                  <div className="grid gap-2">
                     <Select value={eventId} onValueChange={setEventId}>
                       <SelectTrigger id="eventSelect" aria-label="Wybierz wydarzenie biznesowe">
                         <SelectValue placeholder="Wybierz wydarzenie" />
@@ -250,12 +266,11 @@ export default function RezerwacjeBiznesPage() {
                       <SelectContent>
                         {events.map((e) => {
                           const cap = parseCapacity(e.capacityLabel);
-                          const soldOut = cap !== null && cap <= 0;
-
+                          const left = cap !== null && e.takenSeats != null ? Math.max(0, cap - e.takenSeats) : null;
+                          const soldOut = left !== null && left <= 0;
                           return (
                             <SelectItem key={e.id} value={e.id} disabled={soldOut}>
                               {e.title}
-                              {soldOut ? " — KONIEC MIEJSC" : null}
                             </SelectItem>
                           );
                         })}
@@ -280,8 +295,13 @@ export default function RezerwacjeBiznesPage() {
 
                         {event.capacityLabel ? (
                           <div className="text-sm text-muted-foreground">
-                            Limit miejsc: {event.capacityLabel}{" "}
-                            {isSoldOut ? <span className="font-medium text-destructive">— KONIEC MIEJSC</span> : null}
+                            {isSoldOut ? (
+                              <span className="font-medium text-destructive">Brak wolnych miejsc</span>
+                            ) : spotsLeft !== null ? (
+                              <>Pozostało: <span className="font-medium text-foreground">{spotsLeft}</span> miejsc</>
+                            ) : (
+                              <>Limit: {event.capacityLabel} miejsc</>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -332,26 +352,69 @@ export default function RezerwacjeBiznesPage() {
             </CardHeader>
 
             <CardContent className="grid gap-6">
-              <div className="rounded-lg border p-4">
-                <div className="text-sm text-muted-foreground">Podsumowanie</div>
+              <div className="grid gap-3">
+                <div className="grid gap-2 max-w-[200px]">
+                  {spotsLeft !== null && !isSoldOut ? (
+                    <p className="text-xs text-muted-foreground">
+                      Pozostało: <span className="font-medium text-foreground">{spotsLeft}</span> miejsc
+                    </p>
+                  ) : null}
+                  <Label htmlFor="partySize">Liczba osób</Label>
+                  <Input
+                    id="partySize"
+                    ref={partySizeRef}
+                    name={partySizeName}
+                    type="number"
+                    min={1}
+                    max={maxPartySize}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val > maxPartySize) e.target.value = String(maxPartySize);
+                      else if (!isNaN(val) && val < 1) e.target.value = "1";
+                      partySizeChange(e);
+                    }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (isNaN(val) || val < 1) e.target.value = "1";
+                      else if (val > maxPartySize) e.target.value = String(maxPartySize);
+                      partySizeBlur(e);
+                    }}
+                    aria-describedby="partySizeError"
+                  />
+                  <div id="partySizeError">
+                    <ErrorSlot message={form.formState.errors.partySize?.message as string | undefined} />
+                  </div>
+                </div>
 
-                {event ? (
-                  <>
-                    <div className="font-medium">
-                      {event.title} • {event.dateLabel} • {event.timeLabel}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Płatność na miejscu</div>
-                    {event.priceLabel ? <div className="text-sm font-medium">Cena: {event.priceLabel}</div> : null}
-                    {event.capacityLabel ? (
-                      <div className="text-sm text-muted-foreground">
-                        Limit miejsc: {event.capacityLabel}{" "}
-                        {isSoldOut ? <span className="font-medium text-destructive">— KONIEC MIEJSC</span> : null}
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm text-muted-foreground">Podsumowanie</div>
+
+                  {event ? (
+                    <>
+                      <div className="font-medium">
+                        {event.title} &bull; {event.dateLabel} &bull; {event.timeLabel}
                       </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground">Brak wybranego wydarzenia.</div>
-                )}
+                      {event.priceLabel ? (
+                        <div className="text-sm font-medium">
+                          Cena / os.: {event.priceLabel}{" "}
+                          {(event.pricePLN ?? 0) > 0 ? (
+                            <span className="text-muted-foreground">(płatność online)</span>
+                          ) : (
+                            <span className="text-muted-foreground">(płatność na miejscu)</span>
+                          )}
+                        </div>
+                      ) : null}
+                      {(event.pricePLN ?? 0) > 0 ? (
+                        <div className="mt-1 text-sm font-semibold">
+                          Do zapłaty: {formatPLN(totalPLN)}
+                        </div>
+                      ) : null}
+                      {isSoldOut ? <span className="font-medium text-destructive text-sm">— KONIEC MIEJSC</span> : null}
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Brak wybranego wydarzenia.</div>
+                  )}
+                </div>
               </div>
 
               {isSoldOut ? (
@@ -426,6 +489,12 @@ export default function RezerwacjeBiznesPage() {
                 href="/polityka-prywatnosci"
               />
 
+              {serverError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <ServerErrorMessage message={serverError} />
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>
                   Wróć
@@ -439,34 +508,18 @@ export default function RezerwacjeBiznesPage() {
                     await form.trigger();
                   }}
                 >
-                  {isSoldOut ? "Koniec miejsc" : form.formState.isSubmitting ? "Wysyłam..." : "Wyślij zapis"}
+                  {isSoldOut
+                    ? "Koniec miejsc"
+                    : form.formState.isSubmitting
+                      ? "Przetwarzam..."
+                      : (event?.pricePLN ?? 0) > 0
+                        ? `Rezerwuję i płacę ${formatPLN(totalPLN)}`
+                        : "Wyślij zapis"}
                 </Button>
               </div>
             </CardContent>
           </Card>
         </form>
-      ) : null}
-
-      {step === 3 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Gotowe!</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <p className="text-muted-foreground" role="status" aria-live="polite">
-              Zgłoszenie zostało wysłane.
-            </p>
-            <Button
-              className="bg-black text-white hover:bg-black/90"
-              onClick={async () => {
-                await loadEvents();
-                setStep(1);
-              }}
-            >
-              Zapisz się na kolejne
-            </Button>
-          </CardContent>
-        </Card>
       ) : null}
     </div>
   );

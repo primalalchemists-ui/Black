@@ -30,6 +30,13 @@ export const OccasionalInquiries: CollectionConfig = {
     group: "Imprezy okolicznościowe",
     useAsTitle: "name",
     defaultColumns: ["type", "date", "startsAt", "status"],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/OccasionalInquiriesListView#OccasionalInquiriesListView',
+        },
+      },
+    },
   },
   access: {
     read: isStaffOrAdmin,
@@ -117,7 +124,6 @@ export const OccasionalInquiries: CollectionConfig = {
       label: "Data",
       type: "date",
       required: true,
-      admin: { description: "Wybierz dzień imprezy. Godziny ustawisz poniżej." },
     },
     { name: "allDay", label: "Całodniowe", type: "checkbox", defaultValue: false },
 

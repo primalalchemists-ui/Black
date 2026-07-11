@@ -61,6 +61,18 @@ export function addMinutes(d: Date, minutes: number) {
   return x;
 }
 
+/**
+ * Zwraca true gdy dzień jest w konfiguracji i ma open=false/""/"false".
+ * false gdy dnia nie ma w konfiguracji (wtedy używamy fallbacku 16-22).
+ */
+export function isDayClosed(date: string, openingHours: OpeningHour[]): boolean {
+  const dayKey = weekdayKeyFromDate(date);
+  const oh = openingHours?.find((x) => x.key === dayKey);
+  if (!oh) return false; // brak konfiguracji → fallback, nie "zamknięte"
+  const openVal = oh.open as any;
+  return openVal === false || openVal === "false" || openVal === "" || openVal === null || openVal === undefined;
+}
+
 export function getOpenCloseForDay(args: { date: string; openingHours: OpeningHour[] }) {
   const { date, openingHours } = args;
 

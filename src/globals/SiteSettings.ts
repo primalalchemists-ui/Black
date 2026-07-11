@@ -16,6 +16,15 @@ export const SiteSettings: GlobalConfig = {
     { name: 'nip', label: 'NIP', type: 'text' },
     { name: 'facebook', label: 'Facebook', type: 'text' },
     { name: 'instagram', label: 'Instagram', type: 'text' },
-    { name: 'openingHours', label: 'Godziny otwarcia (JSON)', type: 'json' },
+    {
+      name: 'openingHours',
+      label: 'Godziny otwarcia',
+      type: 'json',
+      admin: {
+        components: {
+          Field: '@/components/admin/OpeningHoursField#OpeningHoursField',
+        },
+      },
+    },
   ],
 }

@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/rezerwacje/stoliki", label: "Stoliki" },
   { href: "/rezerwacje/kregle", label: "Kręgle" },
   { href: "/rezerwacje/bilard", label: "Bilard" },
+  { href: "/rezerwacje/imprezy", label: "Imprezy" },
   { href: "/rezerwacje/biznes", label: "Biznes" },
 ];
 

@@ -108,9 +108,39 @@ function requireAtRuntime(name: string) {
   return v;
 }
 
+type MailSendParams = {
+  from: string;
+  to: string | string[];
+  subject: string;
+  text?: string;
+  html?: string;
+  [k: string]: unknown;
+};
+
+function makeMockClient(): Resend {
+  const mock = {
+    emails: {
+      send: async (params: MailSendParams) => {
+        const to = Array.isArray(params.to) ? params.to.join(", ") : params.to;
+        console.log(
+          `\n[EMAIL_MODE=mock] MAIL WOULD BE SENT\n` +
+          `  From:    ${params.from}\n` +
+          `  To:      ${to}\n` +
+          `  Subject: ${params.subject}\n` +
+          `  Text:    ${(params.text ?? "").slice(0, 300)}\n`
+        );
+        return { data: { id: `mock-${Date.now()}` }, error: null };
+      },
+    },
+  };
+  return mock as unknown as Resend;
+}
+
 let cachedResend: Resend | null = null;
 
 export function getMailClient(): Resend {
+  if (process.env.EMAIL_MODE === "mock") return makeMockClient();
+
   if (cachedResend) return cachedResend;
 
   const key = getEnv("RESEND_API_KEY");
@@ -124,12 +154,22 @@ export function getMailClient(): Resend {
 }
 
 export function getMailFrom() {
-  const name = getEnv("MAIL_FROM_NAME") ?? "Website";
-  const email = requireAtRuntime("MAIL_FROM_EMAIL");
-  // Resend akceptuje "Name <email@...>"
+  // Preferuj EMAIL_FROM="BLACK <email@...>" jeśli ustawione
+  const emailFrom = getEnv("EMAIL_FROM");
+  if (emailFrom) return emailFrom;
+
+  // Fallback: MAIL_FROM_NAME + MAIL_FROM_EMAIL
+  const name = getEnv("MAIL_FROM_NAME") ?? "BLACK";
+  const email = getEnv("MAIL_FROM_EMAIL") ?? "onboarding@resend.dev";
   return `${name} <${email}>`;
 }
 
 export function getOwnerTo() {
   return requireAtRuntime("MAIL_TO_OWNER");
+}
+
+export function effectiveTo(actual: string): string {
+  return process.env.EMAIL_MODE === "test"
+    ? (process.env.RESERVATION_TEST_EMAIL ?? actual)
+    : actual;
 }

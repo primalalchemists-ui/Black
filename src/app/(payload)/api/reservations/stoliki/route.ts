@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { reservationCreateRequestSchema } from "@/lib/validation/reservations";
-import { getNowInWarsaw, isSlotBookableWithLeadTime } from "../_shared";
+import { getNowInWarsaw, isSlotBookableWithLeadTime, getNextReservationNumber } from "../_shared";
+import { getBlockingEvent } from "@/lib/openingHours";
+import { getMailClient, getMailFrom, getOwnerTo, effectiveTo } from "@/lib/mail";
+import { stolikClientText, stolikOwnerText, stolikClientHtml, stolikOwnerHtml } from "@/lib/mailTemplates";
 
 type OpeningHour = {
   key: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -160,6 +163,36 @@ export async function GET(req: Request) {
 
   const openingHours = await getOpeningHours(payload);
 
+  // Lokal nieczynny tego dnia
+  if (openingHours.length > 0) {
+    const dayKeyCheck = weekdayKeyFromDate(date);
+    const dayEntry = openingHours.find((x) => x.key === dayKeyCheck);
+    if (dayEntry) {
+      const openVal = (dayEntry.open as any);
+      if (openVal === false || openVal === "false" || openVal === "" || openVal === null || openVal === undefined) {
+        return NextResponse.json({
+          ok: true,
+          enabled: false,
+          disabledMessage: "Brak możliwości rezerwacji — lokal nieczynny.",
+          availableTablesCount: onlineSeatsLimit,
+          slots: [],
+        });
+      }
+    }
+  }
+
+  // Lokal zablokowany przez wydarzenie
+  const blockCheck = await getBlockingEvent(date);
+  if (blockCheck.blocked) {
+    return NextResponse.json({
+      ok: true,
+      enabled: false,
+      disabledMessage: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie.",
+      availableTablesCount: onlineSeatsLimit,
+      slots: [],
+    });
+  }
+
   const slots = openingHours.length
     ? buildQuarterSlotsForDay({
         date,
@@ -270,6 +303,17 @@ export async function POST(req: Request) {
     const dateOnly = String((data as any).date || "");
     const time = String((data as any).hour || "");
 
+    if (dateOnly) {
+      const [slotH] = time.split(":").map(Number)
+      const blockCheck = await getBlockingEvent(dateOnly, Number.isFinite(slotH) ? slotH : undefined)
+      if (blockCheck.blocked) {
+        return NextResponse.json(
+          { error: "VENUE_BLOCKED", message: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie." },
+          { status: 409 }
+        )
+      }
+    }
+
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
       return NextResponse.json({ error: "BAD_DATE", issues: [issue(["date"], "Niepoprawna data.")] }, { status: 400 });
     }
@@ -352,10 +396,15 @@ export async function POST(req: Request) {
     const endHour = String(endsAt.getHours());
     const endMinute = String(endsAt.getMinutes());
 
+    const reservationNumber = await getNextReservationNumber(payload, "S");
+    const groupId = crypto.randomUUID();
+
     const reservationDoc = await payload.create({
       collection: "reservations",
       data: {
         type: "stolik",
+        reservationNumber,
+        groupId,
         customer: {
           firstName: (data as any).firstName,
           lastName: (data as any).lastName,
@@ -386,7 +435,55 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
+    // Wyślij maile (nie blokuj odpowiedzi przy błędzie)
+    try {
+      const mail = getMailClient();
+      const from = getMailFrom();
+      const ownerEmail = getOwnerTo();
+      const [yy, mm, dd] = dateOnly.split("-");
+      const dateDisplay = `${dd}.${mm}.${yy}`;
+      const clientEmail: string = (data as any).email ?? "";
+
+      const stolikClientParams = {
+        reservationNumber,
+        date: dateDisplay,
+        time,
+        partySize,
+        firstName: (data as any).firstName,
+      }
+      const stolikOwnerParams = {
+        reservationNumber,
+        date: dateDisplay,
+        time,
+        partySize,
+        firstName: (data as any).firstName,
+        lastName: (data as any).lastName,
+        phone: (data as any).phone,
+        email: clientEmail || "—",
+      }
+
+      if (clientEmail) {
+        await mail.emails.send({
+          from,
+          to: effectiveTo(clientEmail),
+          subject: `Potwierdzenie rezerwacji stolika — ${reservationNumber}`,
+          text: stolikClientText(stolikClientParams),
+          html: stolikClientHtml(stolikClientParams),
+        });
+      }
+
+      await mail.emails.send({
+        from,
+        to: effectiveTo(ownerEmail),
+        subject: `Nowa rezerwacja stolika — ${reservationNumber}`,
+        text: stolikOwnerText(stolikOwnerParams),
+        html: stolikOwnerHtml(stolikOwnerParams),
+      });
+    } catch (err) {
+      console.error("[stoliki] Email error:", err);
+    }
+
+    return NextResponse.json({ ok: true, groupId, reservationId: reservationDoc.id, reservationNumber });
   } catch (e: any) {
     console.error("[/api/reservations/stoliki] POST error:", e);
     return NextResponse.json(

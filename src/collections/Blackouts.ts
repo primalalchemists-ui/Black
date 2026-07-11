@@ -24,6 +24,13 @@ export const Blackouts: CollectionConfig = {
   admin: {
     useAsTitle: "title",
     defaultColumns: ["service", "day", "allDay", "startHour", "startMinute", "endHour", "endMinute", "active"],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/BlackoutsListView#BlackoutsListView',
+        },
+      },
+    },
   },
 
   access: {
@@ -124,7 +131,6 @@ export const Blackouts: CollectionConfig = {
       label: "Dzień",
       type: "date",
       required: true,
-      admin: { description: "Wybierz dzień blokady. Godzinę i minutę ustawisz poniżej." },
     },
 
     { name: "allDay", label: "Całodniowa", type: "checkbox", defaultValue: false },
@@ -175,7 +181,6 @@ export const Blackouts: CollectionConfig = {
       hasMany: true,
       required: true,
       admin: {
-        description: "Najpierw wybierz usługę — lista zasobów przefiltruje się automatycznie.",
         condition: (_, s) => Boolean(s?.service),
       },
 

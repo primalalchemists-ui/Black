@@ -9,10 +9,8 @@ import { FadeInImage } from "@/components/ui/FadeInImage";
 const FALLBACK_IMG = "/images/icons/black-heart.png";
 
 const KIND_LABEL: Record<NonNullable<CmsEvent["kind"]>, string> = {
-  promo: "Promocja",
-  business: "Biznes",
-  party: "Impreza",
-  sport: "Sport",
+  impreza: "Impreza",
+  biznes: "Biznes",
 };
 
 export function EventSlide({
@@ -31,7 +29,18 @@ export function EventSlide({
   const dt = getEventDisplayDateTimePL(e);
   const priceLabel = renderPricePLN(e.pricePLN);
   const capacity = typeof e.capacity === "number" ? e.capacity : null;
+  const takenSeats = typeof e.takenSeats === "number" ? e.takenSeats : null;
+  const spotsLeft = capacity !== null && takenSeats !== null ? Math.max(0, capacity - takenSeats) : null;
   const hasImage = Boolean(e.imageUrl);
+
+  const endTime = (() => {
+    if (e.endHour != null && e.endMinute != null) {
+      const h = String(Number(e.endHour)).padStart(2, "0");
+      const m = String(Number(e.endMinute)).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+    return null;
+  })();
 
   const showCtaButton = Boolean(href);
   const showActionButton = Boolean(actionLabel && onAction);
@@ -85,16 +94,27 @@ export function EventSlide({
                 </div>
                 <div className="flex items-center gap-2 text-foreground/80">
                   <Clock className="h-4 w-4 shrink-0 text-[hsl(var(--brand))]" />
-                  <span className="font-medium">{dt.time}</span>
+                  <span className="font-medium">
+                    {dt.time}{endTime ? ` – ${endTime}` : ""}
+                  </span>
                 </div>
               </>
             )}
-            {capacity != null && (
+            {spotsLeft !== null ? (
+              <div className="flex items-center gap-2 text-foreground/80">
+                <Users className="h-4 w-4 shrink-0 text-[hsl(var(--brand))]" />
+                <span className={`font-medium ${spotsLeft === 0 ? "text-destructive" : spotsLeft <= 5 ? "text-amber-600" : ""}`}>
+                  {spotsLeft === 0
+                    ? "Brak miejsc"
+                    : `Pozostało: ${spotsLeft} ${spotsLeft === 1 ? "miejsce" : spotsLeft < 5 ? "miejsca" : "miejsc"}`}
+                </span>
+              </div>
+            ) : capacity !== null ? (
               <div className="flex items-center gap-2 text-foreground/80">
                 <Users className="h-4 w-4 shrink-0 text-[hsl(var(--brand))]" />
                 <span className="font-medium">Limit: {capacity} osób</span>
               </div>
-            )}
+            ) : null}
             {priceLabel && (
               <p className="text-sm text-muted-foreground">
                 Cena: <span className="font-medium text-foreground">{priceLabel}</span>
@@ -105,12 +125,21 @@ export function EventSlide({
           {(showCtaButton || showActionButton) && (
             <div className="relative z-20 mt-auto pt-2">
               {showCtaButton && href && (
-                <Button
-                  asChild
-                  className="pointer-events-auto w-full bg-primary text-primary-foreground hover:bg-[hsl(30,4%,18%)] hover:text-primary-foreground"
-                >
-                  <Link href={href}>{ctaLabel}</Link>
-                </Button>
+                spotsLeft === 0 ? (
+                  <Button
+                    disabled
+                    className="pointer-events-auto w-full bg-primary text-primary-foreground opacity-50 cursor-not-allowed"
+                  >
+                    Brak miejsc
+                  </Button>
+                ) : (
+                  <Button
+                    asChild
+                    className="pointer-events-auto w-full bg-primary text-primary-foreground hover:bg-[hsl(30,4%,18%)] hover:text-primary-foreground"
+                  >
+                    <Link href={href}>{ctaLabel}</Link>
+                  </Button>
+                )
               )}
               {showActionButton && !showCtaButton && (
                 <Button

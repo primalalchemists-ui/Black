@@ -34,6 +34,8 @@ export default function HomePageClient({ settings }: { settings: SiteSettings })
       <div className="grid w-full max-w-full gap-12">
         <HeroSection setApi={setHeroApi} api={heroApi} />
 
+        <EventSection />
+
         <OfferSection />
         <PlaceInfoSection settings={settings} />
         <div className="mx-auto w-full px-4 md:px-0">

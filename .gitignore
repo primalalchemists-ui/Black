@@ -45,9 +45,14 @@ next-env.d.ts
 # jednorazowy skrypt seedujący menu (nie wrzucamy do repo)
 scripts/seed-menu.ts
 
+# lokalne nadpisania docker-compose (mogą zawierać klucze API)
+docker-compose.override.yml
+
 # Playwright
 node_modules/
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+.claude/
+nul

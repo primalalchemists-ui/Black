@@ -78,7 +78,15 @@ export const Reservations: CollectionConfig = {
 
   admin: {
     group: "Rezerwacje",
+    useAsTitle: "reservationNumber",
     defaultColumns: ["type", "startsAt", "status", "customer.phone", "paymentStatus"],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/ReservationsListView#ReservationsListView',
+        },
+      },
+    },
   },
 
   access: {
@@ -95,14 +103,14 @@ export const Reservations: CollectionConfig = {
         if (!data || !type) return data;
 
         // Czyścimy pola, które nie pasują do typu
-        if (type !== "stolik") {
+        if (type !== "stolik" && type !== "impreza" && type !== "biznes") {
           delete (data as any).partySize;
           delete (data as any).tablesCount;
         }
         if (type !== "kregle" && type !== "bilard") {
           delete (data as any).resources;
         }
-        if (type !== "biznes") {
+        if (type !== "biznes" && type !== "impreza") {
           delete (data as any).event;
           delete (data as any).disabledPerson;
           delete (data as any).disabilityDetails;
@@ -145,10 +153,11 @@ export const Reservations: CollectionConfig = {
               const endD = new Date(endsAtIso);
 
               if (endD <= startD) {
-                throw new Error("Czas „Koniec” musi być późniejszy niż „Start”.");
+                // overnight event (e.g. 22:00 – 02:00) — push end to next day
+                endD.setDate(endD.getDate() + 1);
               }
 
-              (data as any).endsAt = endsAtIso;
+              (data as any).endsAt = endD.toISOString();
             } else {
               (data as any).endsAt = undefined;
             }
@@ -253,6 +262,7 @@ export const Reservations: CollectionConfig = {
         { label: "Stoliki", value: "stolik" },
         { label: "Kręgle", value: "kregle" },
         { label: "Bilard", value: "bilard" },
+        { label: "Impreza (zapis na wydarzenie)", value: "impreza" },
         { label: "Biznes (zapis na wydarzenie)", value: "biznes" },
       ],
     },
@@ -276,7 +286,6 @@ export const Reservations: CollectionConfig = {
       label: "Dzień",
       type: "date",
       required: true,
-      admin: { description: "Wybierz dzień rezerwacji. Godzinę i minutę ustawisz poniżej." },
     },
     { name: "allDay", label: "Całodniowe", type: "checkbox", defaultValue: false },
 
@@ -326,13 +335,6 @@ export const Reservations: CollectionConfig = {
         if (endHourEmpty && endMinuteEmpty) return true;
         if (endHourEmpty !== endMinuteEmpty) return "Ustaw zarówno godzinę, jak i minutę końca.";
 
-        const day = siblingData?.day;
-        if (!day) return true;
-
-        const startIso = buildDateTimeFromDayHourMinuteUTC(day, String(siblingData?.startHour ?? "0"), String(siblingData?.startMinute ?? "0"));
-        const endIso = buildDateTimeFromDayHourMinuteUTC(day, String(endHour), String(endMinute));
-
-        if (new Date(endIso) <= new Date(startIso)) return "Czas „Koniec” musi być późniejszy niż „Start”.";
         return true;
       },
     },
@@ -357,7 +359,7 @@ export const Reservations: CollectionConfig = {
       name: "partySize",
       label: "Liczba osób",
       type: "number",
-      admin: { condition: (_, s) => s?.type === "stolik" },
+      admin: { condition: (_, s) => ["stolik", "impreza", "biznes"].includes(s?.type) },
       validate: (val, { siblingData }) => {
         if (siblingData?.type !== "stolik") return true;
         const ps = clampPartySize(val as any);
@@ -371,9 +373,8 @@ export const Reservations: CollectionConfig = {
       label: "Liczba stolików",
       type: "number",
       admin: {
-        condition: (_, s) => s?.type === "stolik",
+        hidden: true,
         readOnly: true,
-        description: "Zawsze 1 dla rezerwacji online (tablesCount nie odzwierciedla fizycznych stolików).",
       },
       validate: (val, { siblingData }) => {
         if (siblingData?.type !== "stolik") return true;
@@ -391,7 +392,6 @@ export const Reservations: CollectionConfig = {
       hasMany: true,
       admin: {
         condition: (_, s) => s?.type === "kregle" || s?.type === "bilard",
-        description: "Najpierw wybierz typ rezerwacji (Kręgle/Bilard) — lista zasobów przefiltruje się automatycznie.",
       },
       filterOptions: ({ siblingData }) => {
         const t = siblingData?.type as ReservationType | undefined;
@@ -444,18 +444,32 @@ export const Reservations: CollectionConfig = {
       name: "invoice",
       label: "Faktura",
       type: "group",
+      admin: { condition: (data) => data?.type !== "stolik" },
       fields: [
         { name: "wantInvoice", label: "Chcę fakturę", type: "checkbox", defaultValue: false },
+        {
+          name: "invoiceType",
+          label: "Typ faktury",
+          type: "select",
+          options: [
+            { label: "Osoba prywatna", value: "personal" },
+            { label: "Firma", value: "company" },
+          ],
+          admin: {
+            condition: (_, siblingData) => Boolean(siblingData?.wantInvoice),
+          },
+        },
         {
           name: "nip",
           label: "NIP",
           type: "text",
           admin: {
-            condition: (_, siblingData) => Boolean(siblingData?.wantInvoice),
-            description: "Pole wymagane, jeśli klient chce fakturę.",
+            condition: (_, siblingData) =>
+              Boolean(siblingData?.wantInvoice) && siblingData?.invoiceType === "company",
           },
           validate: (val, { siblingData }) => {
             if (!siblingData?.wantInvoice) return true;
+            if (siblingData?.invoiceType !== "company") return true;
             if (!val || String(val).trim().length === 0) return "Podaj NIP.";
             const digits = String(val).replace(/\D/g, "");
             if (digits.length !== 10) return "NIP powinien mieć 10 cyfr.";
@@ -496,8 +510,8 @@ export const Reservations: CollectionConfig = {
     },
 
     // Płatności
-    { name: "depositRequired", label: "Wymagana zaliczka", type: "checkbox", defaultValue: false },
-    { name: "depositAmount", label: "Kwota zaliczki (PLN)", type: "number" },
+    { name: "depositRequired", label: "Wymagana opłata", type: "checkbox", defaultValue: false, admin: { condition: (data) => data?.type !== "stolik" } },
+    { name: "depositAmount", label: "Kwota (PLN)", type: "number", admin: { condition: (data) => data?.type !== "stolik" } },
 
     {
       name: "paymentStatus",
@@ -513,13 +527,18 @@ export const Reservations: CollectionConfig = {
         { label: "Zwrot", value: "refunded" },
         { label: "Przepadło", value: "forfeited" },
       ],
+      admin: { condition: (data) => data?.type !== "stolik" },
     },
     {
       name: "paymentProvider",
       label: "Operator płatności",
       type: "select",
       options: [{ label: "Przelewy24", value: "p24" }],
+      admin: { condition: (data) => data?.type !== "stolik" },
     },
-    { name: "payment", label: "Płatność", type: "relationship", relationTo: "payments" },
+    { name: "payment", label: "Płatność", type: "relationship", relationTo: "payments", admin: { condition: (data) => data?.type !== "stolik" } },
+
+    { name: "groupId", label: "Group ID (wew.)", type: "text", admin: { readOnly: true, hidden: true } },
+    { name: "reservationNumber", label: "Numer rezerwacji", type: "text", admin: { readOnly: true } },
   ],
 };

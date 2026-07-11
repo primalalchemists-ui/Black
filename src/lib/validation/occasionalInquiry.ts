@@ -35,9 +35,9 @@ export const occasionalInquirySchema = z
       .max(3000, "Za długa wiadomość"),
 
     // ✅ tylko polityka prywatności
-    acceptPrivacyPolicy: z.boolean().refine((v) => v === true, {
-      message: "Musisz zaakceptować politykę prywatności",
-    }),
+    acceptPrivacyPolicy: z
+      .boolean({ invalid_type_error: "Musisz zaakceptować politykę prywatności" })
+      .refine((v) => v === true, { message: "Musisz zaakceptować politykę prywatności" }),
   })
   .superRefine((val, ctx) => {
     // ✅ NIP wymagany tylko gdy firma

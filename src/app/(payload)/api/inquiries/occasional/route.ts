@@ -71,7 +71,7 @@
 
 import { NextResponse } from "next/server";
 import { getMailClient, getMailFrom, getOwnerTo } from "@/lib/mail";
-import { inquiryClientText, inquiryOwnerText } from "@/lib/mailTemplates";
+import { inquiryClientText, inquiryOwnerText, inquiryOwnerHtml, inquiryClientHtml } from "@/lib/mailTemplates";
 import { occasionalInquirySchema } from "@/lib/validation/occasionalInquiry";
 
 export const runtime = "nodejs"; // ważne na Next
@@ -108,21 +108,24 @@ export async function POST(req: Request) {
     const ownerTo = getOwnerTo();
     const from = getMailFrom();
 
+    const ownerParams = {
+      firstName: v.firstName,
+      lastName: v.lastName,
+      phone: v.phone,
+      email: v.email,
+      isCompany: v.isCompany,
+      nip: v.nip,
+      message: v.message,
+    }
+
     // mail do właściciela
     await resend.emails.send({
       from,
       to: ownerTo,
       subject: `Zapytanie o event: ${v.firstName} ${v.lastName}`,
-      text: inquiryOwnerText({
-        firstName: v.firstName,
-        lastName: v.lastName,
-        phone: v.phone,
-        email: v.email,
-        isCompany: v.isCompany,
-        nip: v.nip,
-        message: v.message,
-      }),
-      reply_to: v.email,
+      text: inquiryOwnerText(ownerParams),
+      html: inquiryOwnerHtml(ownerParams),
+      replyTo: v.email,
     });
 
     // mail do klienta
@@ -131,6 +134,7 @@ export async function POST(req: Request) {
       to: v.email,
       subject: "Potwierdzenie otrzymania zapytania",
       text: inquiryClientText({ firstName: v.firstName }),
+      html: inquiryClientHtml({ firstName: v.firstName }),
     });
 
     return NextResponse.json({ ok: true });

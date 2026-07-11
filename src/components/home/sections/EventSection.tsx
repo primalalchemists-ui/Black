@@ -8,8 +8,9 @@ import DotNav from "@/components/home/components/DotNav"
 import { EventSlide } from "@/components/events/EventSlide"
 import type { CmsEvent } from "@/lib/cms/events"
 
-function routeForKind(kind: NonNullable<CmsEvent["kind"]>) {
-  return kind === "business" ? "/biznes" : "/rozrywka"
+function reservationHref(e: CmsEvent) {
+  const base = e.kind === "biznes" ? "/rezerwacje/biznes" : "/rezerwacje/imprezy"
+  return `${base}?eventId=${e.id}`
 }
 
 function SkeletonCard() {
@@ -55,15 +56,26 @@ export default function EventSection() {
     return () => { alive = false }
   }, [])
 
-  const routedEvents = React.useMemo(() => events.filter((e) => !!e.kind), [events])
+  const routedEvents = React.useMemo(() => events.filter((e) => !!e.kind && e.showOnHomepage === true), [events])
 
   if (!loading && routedEvents.length === 0) return null
 
+  const isMultiple = !loading && routedEvents.length > 1
+
   return (
     <section aria-labelledby="event-title" className="mx-auto grid w-full gap-4 px-4 md:px-0">
-      <h2 id="event-title" className="text-2xl font-semibold">
-        {loading || routedEvents.length <= 1 ? "Nadchodzące wydarzenie" : "Nadchodzące wydarzenia"}
-      </h2>
+      <div className="flex items-center justify-between gap-4">
+        <h2 id="event-title" className="text-2xl font-semibold">
+          {loading || routedEvents.length <= 1 ? "Nadchodzące wydarzenie" : "Nadchodzące wydarzenia"}
+        </h2>
+        {isMultiple && (
+          <DotNav
+            api={api}
+            label="Nawigacja karuzeli wydarzeń"
+            variant="numbers"
+          />
+        )}
+      </div>
 
       <AnimatePresence mode="wait" initial={false}>
         {loading ? (
@@ -86,8 +98,8 @@ export default function EventSection() {
           >
             <EventSlide
               e={routedEvents[0]!}
-              href={routeForKind(routedEvents[0]!.kind!)}
-              ctaLabel="Dowiedz się więcej"
+              href={reservationHref(routedEvents[0]!)}
+              ctaLabel="Zapisz się"
             />
           </motion.div>
         ) : (
@@ -98,27 +110,24 @@ export default function EventSection() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="relative w-full overflow-hidden">
-              <Carousel
-                aria-label="Karuzela nadchodzących wydarzeń"
-                opts={{ align: "start", containScroll: "trimSnaps", slidesToScroll: 1, loop: true }}
-                setApi={setApi as any}
-                className="w-full overflow-hidden"
-              >
-                <CarouselContent className="-ml-4">
-                  {routedEvents.map((e) => (
-                    <CarouselItem key={String(e.id)} className="pl-4 basis-full">
-                      <EventSlide
-                        e={e}
-                        href={routeForKind(e.kind!)}
-                        ctaLabel="Dowiedz się więcej"
-                      />
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-              </Carousel>
-              <DotNav api={api} label="Nawigacja karuzeli wydarzeń" className="mt-3" />
-            </div>
+            <Carousel
+              aria-label="Karuzela nadchodzących wydarzeń"
+              opts={{ align: "start", containScroll: "trimSnaps", slidesToScroll: 1, loop: true }}
+              setApi={setApi as any}
+              className="w-full overflow-hidden"
+            >
+              <CarouselContent className="-ml-4">
+                {routedEvents.map((e) => (
+                  <CarouselItem key={String(e.id)} className="pl-4 basis-full">
+                    <EventSlide
+                      e={e}
+                      href={reservationHref(e)}
+                      ctaLabel="Zapisz się"
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            </Carousel>
           </motion.div>
         )}
       </AnimatePresence>

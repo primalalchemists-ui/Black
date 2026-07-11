@@ -15,9 +15,13 @@ import {
   hourFloatFromHHMM,
   getNowInWarsaw,
   isSlotBookableWithLeadTime,
+  getNextReservationNumber,
 } from "../_shared";
 
-import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes } from "../_openingHours";
+import { registerTransaction } from "@/lib/p24";
+
+import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
+import { getBlockingEvent } from "@/lib/openingHours";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -85,8 +89,35 @@ export async function GET(req: Request) {
   const slotMinutes = 60;
 
   const openingHours = await getOpeningHours(payload);
-  const oc = getOpenCloseForDay({ date, openingHours });
 
+  // Lokal nieczynny tego dnia
+  if (openingHours.length > 0 && isDayClosed(date, openingHours)) {
+    return NextResponse.json({
+      ok: true,
+      enabled: false,
+      disabledMessage: "Brak możliwości rezerwacji — lokal nieczynny.",
+      pricePerHour,
+      slotMinutes: 60,
+      resources: [],
+      slots: [],
+    });
+  }
+
+  // Lokal zablokowany przez wydarzenie
+  const blockCheck = await getBlockingEvent(date);
+  if (blockCheck.blocked) {
+    return NextResponse.json({
+      ok: true,
+      enabled: false,
+      disabledMessage: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie.",
+      pricePerHour,
+      slotMinutes: 60,
+      resources: [],
+      slots: [],
+    });
+  }
+
+  const oc = getOpenCloseForDay({ date, openingHours });
 
   const openAt = oc?.openAt ?? new Date(date + "T00:00:00");
   if (!oc) openAt.setHours(16, 0, 0, 0);
@@ -225,9 +256,12 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/reservations/bilard
- * ✅ segments[] -> wiele rezerwacji
+ * segments[] -> jeden rekord w reservations z wszystkimi stołami w resources[]
  */
+const CONTACT_MSG = "Nie udało się przetworzyć płatności. Skontaktuj się z obsługą lokalu: 601 275 261."
+
 export async function POST(req: Request) {
+  try {
   const payload = await getPayload({ config });
 
   const body = await req.json().catch(() => null);
@@ -278,6 +312,17 @@ export async function POST(req: Request) {
       { error: "NO_AVAILABILITY", issues: [{ path: ["date"], message: "Nie można rezerwować terminu z przeszłości." }] },
       { status: 409 }
     );
+  }
+
+  if (typeof data?.date === "string") {
+    const startH = typeof data?.startHour === "number" ? data.startHour : undefined
+    const blockCheck = await getBlockingEvent(data.date, startH != null ? Math.trunc(startH) : undefined)
+    if (blockCheck.blocked) {
+      return NextResponse.json(
+        { error: "VENUE_BLOCKED", message: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie." },
+        { status: 409 }
+      )
+    }
   }
 
   const rType = resourceTypeForReservation("bilard");
@@ -441,45 +486,76 @@ export async function POST(req: Request) {
 
     const groupId = (globalThis.crypto as any)?.randomUUID?.() ?? String(Date.now());
     const amountToPay = toCreate.reduce((acc, x) => acc + x.segmentPrice, 0);
+    const amountGrosze = Math.round(amountToPay * 100);
 
-    const createdIds: Array<string | number> = [];
+    // Jeden numer rezerwacji na całą grupę (wszystkie stoły = jedna rezerwacja klienta)
+    const groupReservationNumber = await getNextReservationNumber(payload, "B");
 
-    for (const x of toCreate) {
-      const dayISO = startOfLocalDayISO(x.startsAt);
+    // Rejestracja transakcji P24 PRZED zapisem do bazy
+    let p24PayUrl: string | null = null;
+    if (amountGrosze > 0) {
+      try {
+        const { payUrl } = await registerTransaction({
+          sessionId: groupId,
+          amount: amountGrosze,
+          description: `Rezerwacja ${groupReservationNumber}`,
+          email: data.email,
+        });
+        p24PayUrl = payUrl;
+      } catch (err) {
+        console.error("[bilard] P24 register error:", err);
+        return NextResponse.json(
+          { error: "PAYMENT_ERROR", message: CONTACT_MSG },
+          { status: 502 }
+        );
+      }
+    }
 
-      const doc = await payload.create({
-        collection: "reservations",
-        data: {
-          type: "bilard",
-          day: dayISO,
-          groupId,
+    console.log(`[bilard] P24 payUrl=${p24PayUrl} groupId=${groupId}`)
 
-          customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-          notes: data.notes || "",
+    // Zapis do bazy — JEDEN rekord dla wszystkich stołów
+    const allResourceIds = [...new Set(toCreate.map(x => x.resourceId))]
+    const minStartsAt = toCreate.reduce((min, x) => x.startsAt < min ? x.startsAt : min, toCreate[0].startsAt)
+    const maxEndsAt = toCreate.reduce((max, x) => x.endsAt > max ? x.endsAt : max, toCreate[0].endsAt)
+    const dayISO2 = startOfLocalDayISO(minStartsAt)
 
-          startsAt: x.startsAt.toISOString(),
-          endsAt: x.endsAt.toISOString(),
+    const doc = await payload.create({
+      collection: "reservations",
+      data: {
+        type: "bilard",
+        day: dayISO2,
+        groupId,
+        reservationNumber: groupReservationNumber,
 
-          startHour: x.startsAt.getHours(),
-          startMinute: x.startsAt.getMinutes(),
-          endHour: x.endsAt.getHours(),
-          endMinute: x.endsAt.getMinutes(),
+        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+        notes: data.notes || "",
 
-          resources: [x.resourceId],
-          invoice: { wantInvoice: data.wantInvoice, nip: data.nip || "" },
-          acceptRules: data.acceptRules,
+        startsAt: minStartsAt.toISOString(),
+        endsAt: maxEndsAt.toISOString(),
 
-          source: "online",
-          status: "new",
+        startHour: minStartsAt.getHours(),
+        startMinute: minStartsAt.getMinutes(),
+        endHour: maxEndsAt.getHours(),
+        endMinute: maxEndsAt.getMinutes(),
 
-          depositRequired: x.segmentPrice > 0,
-          depositAmount: x.segmentPrice > 0 ? x.segmentPrice : 0,
-          paymentStatus: x.segmentPrice > 0 ? "pending" : "not_required",
-          paymentProvider: x.segmentPrice > 0 ? "p24" : undefined,
-        } as any,
-      });
+        resources: allResourceIds,
+        invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
+        acceptRules: data.acceptRules,
 
-      createdIds.push(doc.id);
+        source: "online",
+        status: "new",
+
+        depositRequired: amountToPay > 0,
+        depositAmount: amountToPay > 0 ? amountToPay : 0,
+        paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
+        paymentProvider: amountGrosze > 0 ? "p24" : undefined,
+      } as any,
+    })
+
+    const createdIds = [doc.id]
+
+    if (p24PayUrl) {
+      return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });
     }
 
     return NextResponse.json({ ok: true, groupId, reservationIds: createdIds, amountToPay });
@@ -584,7 +660,7 @@ export async function POST(req: Request) {
       endMinute: endsAt.getMinutes(),
 
       resources: resourceIds,
-      invoice: { wantInvoice: data.wantInvoice, nip: data.nip || "" },
+      invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
       acceptRules: data.acceptRules,
 
       source: "online",
@@ -598,4 +674,12 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
+
+  } catch (e: any) {
+    console.error("[bilard] POST nieoczekiwany błąd:", e?.message ?? e)
+    return NextResponse.json(
+      { error: "INTERNAL_ERROR", message: CONTACT_MSG },
+      { status: 500 }
+    )
+  }
 }

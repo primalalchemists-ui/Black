@@ -31,9 +31,6 @@ export const ReservationSettings: GlobalConfig = {
           type: 'text',
           name: 'disabledMessage',
           label: 'Komunikat, gdy rezerwacje stolików są wyłączone (opcjonalnie)',
-          admin: {
-            description: 'Np. "Rezerwacje stolików są chwilowo wyłączone. Zadzwoń do nas."',
-          },
         },
 
         {
@@ -43,10 +40,6 @@ export const ReservationSettings: GlobalConfig = {
           required: true,
           defaultValue: 12,
           min: 0,
-          admin: {
-            description:
-              'Maksymalna liczba osób, które mogą mieć aktywną rezerwację online w tym samym czasie. To nie jest liczba fizycznych stolików.',
-          },
         },
 
         {
@@ -56,10 +49,6 @@ export const ReservationSettings: GlobalConfig = {
           defaultValue: 120,
           min: 0,
           max: 480,
-          admin: {
-            description:
-              'Przez ile minut miejsca są blokowane po wybranej godzinie rezerwacji. Zalecane: 120.',
-          },
         },
         {
           type: 'number',
@@ -80,13 +69,6 @@ export const ReservationSettings: GlobalConfig = {
           defaultValue: 200,
           min: 0,
           admin: { hidden: true },
-        },
-        {
-          type: 'number',
-          name: 'depositFromTablesCount',
-          label: 'Zaliczka obowiązuje od ilu osób',
-          defaultValue: 2,
-          min: 1,
         },
         {
           type: 'number',
@@ -127,9 +109,6 @@ export const ReservationSettings: GlobalConfig = {
           type: 'text',
           name: 'disabledMessage',
           label: 'Komunikat, gdy rezerwacje bilarda są wyłączone (opcjonalnie)',
-          admin: {
-            description: 'Np. "Rezerwacje bilarda są chwilowo wyłączone. Zadzwoń do nas."',
-          },
         },
 
         {
@@ -179,9 +158,6 @@ export const ReservationSettings: GlobalConfig = {
           type: 'text',
           name: 'disabledMessage',
           label: 'Komunikat, gdy rezerwacje kręgli są wyłączone (opcjonalnie)',
-          admin: {
-            description: 'Np. "Rezerwacje kręgli są chwilowo wyłączone. Zadzwoń do nas."',
-          },
         },
 
         {
@@ -221,19 +197,12 @@ export const ReservationSettings: GlobalConfig = {
       name: 'regulationsPdf',
       label: 'Regulamin obiektu (PDF)',
       relationTo: 'media',
-      admin: {
-        description: 'Plik PDF z regulaminem. Będzie dostępny do pobrania przy rezerwacji.',
-      },
     },
     {
       type: 'upload',
       name: 'privacyPolicyPdf',
       label: 'Polityka prywatności (PDF)',
       relationTo: 'media',
-      admin: {
-        description:
-          'Plik PDF z polityką prywatności. Będzie dostępny do pobrania przy rezerwacji.',
-      },
     },
   ],
 }

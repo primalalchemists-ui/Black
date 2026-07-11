@@ -5,7 +5,7 @@ export type CmsEvent = {
   id: string | number;
   title: string;
   description?: string | null;
-  kind?: "promo" | "business" | "party" | "sport" | null;
+  kind?: "impreza" | "biznes" | null;
 
   day?: string | null;
   allDay?: boolean | null;
@@ -16,10 +16,12 @@ export type CmsEvent = {
   endMinute?: string | number | null;
 
   capacity?: number | null;
+  takenSeats?: number | null;
   imageUrl?: string | null;
   pricePLN?: number | null;
+  registrationsEnabled?: boolean | null;
+  showOnHomepage?: boolean | null;
 
-  // jeśli kiedyś dodasz:
   startsAt?: string | null;
   endsAt?: string | null;
 };
@@ -30,11 +32,6 @@ export function renderPricePLN(pricePLN: number | null | undefined) {
   return `${pricePLN} zł`;
 }
 
-/**
- * Stabilne datetime:
- * - day parsowane lokalnie (Safari safe)
- * - time z hour/minute
- */
 export function getEventDisplayDateTimePL(e: CmsEvent): { date: string; time: string } | null {
   if (e.day) {
     const d = parseISODateLocal(e.day);
@@ -49,7 +46,6 @@ export function getEventDisplayDateTimePL(e: CmsEvent): { date: string; time: st
     return { date, time: `${pad2(h)}:${pad2(m)}` };
   }
 
-  // fallback jeśli ktoś jednak użyje startsAt
   if (e.startsAt) {
     const d = parseISODateLocal(e.startsAt);
     if (!d) return null;
@@ -91,5 +87,5 @@ export async function fetchEventsByKind(kind: NonNullable<CmsEvent["kind"]>) {
 
 export async function fetchEventsNotBusiness() {
   const all = await fetchCmsEvents();
-  return all.filter((e) => e?.kind !== "business").sort(sortEventsStable);
+  return all.filter((e) => e?.kind !== "biznes").sort(sortEventsStable);
 }

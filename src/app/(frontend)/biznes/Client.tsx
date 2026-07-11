@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import type { CarouselApi } from "@/components/ui/carousel"
 import { useForm } from "react-hook-form"
@@ -20,26 +19,9 @@ import { CustomerFields } from "@/components/reservations/CustomerFields"
 import { CompanyNipFields } from "@/components/reservations/CompanyNipFields"
 
 import { occasionalInquirySchema, type OccasionalInquiry } from "@/lib/validation/occasionalInquiry"
-import { FadeInImage } from "@/components/ui/FadeInImage"
 import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard"
-
-type CmsEvent = {
-  id: string
-  title: string
-  description?: string | null
-  kind?: "promo" | "business" | "party" | "sport" | null
-
-  day?: string | null
-  allDay?: boolean | null
-  startHour?: string | number | null
-  startMinute?: string | number | null
-
-  capacity?: number | null
-  imageUrl?: string | null
-  pricePLN?: number | null
-}
-
-const FALLBACK_IMG = "/images/icons/black-heart.png"
+import { EventSlide } from "@/components/events/EventSlide"
+import type { CmsEvent } from "@/lib/cms/events"
 
 const collapseVariants = {
   closed: { height: 0, opacity: 0, y: -6 },
@@ -52,48 +34,15 @@ const collapseTransition = {
   y: { duration: 0.18 },
 } as const
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0")
-}
-
-function toNumberSafe(v: any, fallback = 0) {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : fallback
-}
-
-function getDisplayDateTimePL(e: CmsEvent): { date: string; time: string } | null {
-  if (!e.day) return null
-  const d = new Date(e.day)
-  if (!Number.isFinite(d.getTime())) return null
-
-  const date = d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" })
-  if (e.allDay) return { date, time: "Całodniowe" }
-
-  const h = toNumberSafe(e.startHour, 0)
-  const m = toNumberSafe(e.startMinute, 0)
-  return { date, time: `${pad2(h)}:${pad2(m)}` }
-}
-
-function renderPrice(pricePLN: number | null | undefined) {
-  if (pricePLN == null) return null
-  if (pricePLN === 0) return "Darmowe"
-  return `${pricePLN} zł`
-}
-
-async function safeFetchJson<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url, { cache: "no-store" })
-    if (!res.ok) return null
-    return (await res.json()) as T
-  } catch {
-    return null
-  }
-}
-
 async function fetchEvents(): Promise<CmsEvent[]> {
-  const json: any = await safeFetchJson("/api/cms/events")
-  const list: CmsEvent[] = Array.isArray(json?.events) ? json.events : []
-  return list
+  try {
+    const res = await fetch("/api/cms/events", { cache: "no-store" })
+    if (!res.ok) return []
+    const json = await res.json()
+    return Array.isArray(json?.events) ? json.events : []
+  } catch {
+    return []
+  }
 }
 
 function MotionWrap({
@@ -119,92 +68,7 @@ function MotionWrap({
   )
 }
 
-function EventsSkeleton() {
-  return (
-    <div className="grid gap-3">
-      <div className="h-[180px] w-full rounded-lg bg-muted animate-pulse" />
-      <div className="hidden md:flex justify-center">
-        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
-      </div>
-    </div>
-  )
-}
-
-function EventSlide({
-  e,
-  onSignup,
-  showSignupButton,
-}: {
-  e: CmsEvent
-  onSignup: (eventId: string) => void
-  showSignupButton: boolean
-}) {
-  const dt = getDisplayDateTimePL(e)
-  const priceLabel = renderPrice(e.pricePLN)
-  const capacity = typeof e.capacity === "number" ? e.capacity : null
-
-  return (
-    <div className="grid gap-4 md:grid-cols-[280px_1fr_auto] md:items-start">
-      <div className="relative h-48 w-full md:h-44">
-        <FadeInImage
-          src={e.imageUrl || FALLBACK_IMG}
-          alt={e.title}
-          className="h-full w-full object-contain"
-          loading="lazy"
-        />
-        {!e.imageUrl && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
-          />
-        )}
-      </div>
-
-      <div className="grid gap-1">
-        <p className="font-semibold">{e.title}</p>
-
-        <p className="text-sm text-muted-foreground">
-          {e.description?.trim() ? e.description : "Szczegóły wydarzenia będą dostępne wkrótce."}
-        </p>
-
-        {dt ? (
-          <p className="text-sm font-medium">
-            Data: {dt.date}, {dt.time}
-          </p>
-        ) : null}
-
-        {priceLabel ? (
-          <p className="text-sm">
-            <span className="font-medium">Cena:</span> {priceLabel}{" "}
-            <span className="text-muted-foreground">
-              {priceLabel !== "Darmowe" ? "(płatność na miejscu)" : ""}
-            </span>
-          </p>
-        ) : null}
-
-        {capacity != null ? (
-          <p className="text-sm">
-            <span className="font-medium">Limit miejsc:</span> {capacity}
-          </p>
-        ) : null}
-      </div>
-
-      {showSignupButton ? (
-        <Button
-          type="button"
-          className="md:self-start"
-          onClick={() => onSignup(String(e.id))}
-        >
-          Zapisz się
-        </Button>
-      ) : null}
-    </div>
-  )
-}
-
 export default function RezerwacjeBiznesPage() {
-  const router = useRouter()
-
   const [showOrganizerForm, setShowOrganizerForm] = React.useState(false)
   const [sent, setSent] = React.useState(false)
 
@@ -224,11 +88,11 @@ export default function RezerwacjeBiznesPage() {
       isCompany: false,
       nip: "",
       message: "",
+      acceptPrivacyPolicy: false,
     },
     mode: "onTouched",
     reValidateMode: "onChange",
     shouldFocusError: false,
-    acceptPrivacyPolicy: false,
   })
 
   React.useEffect(() => {
@@ -237,7 +101,7 @@ export default function RezerwacjeBiznesPage() {
     ;(async () => {
       try {
         const allEvents = await fetchEvents()
-        const filtered = allEvents.filter((e) => e?.kind === "business")
+        const filtered = allEvents.filter((e) => e?.kind === "biznes")
         if (!alive) return
         setEvents(filtered)
       } finally {
@@ -268,16 +132,8 @@ export default function RezerwacjeBiznesPage() {
     setSent(true)
   }
 
-  function handleSignupClick(eventId: string) {
-    try {
-      sessionStorage.setItem("biznes:eventId", eventId)
-    } catch {}
-
-    router.push(`/rezerwacje/biznes?eventId=${encodeURIComponent(eventId)}`)
-  }
-
-  const hasBusinessEvents = events.length > 0
-  const eventsTitle = loadingEvents ? "Wydarzenia" : events.length <= 1 ? "Wydarzenie" : "Wydarzenia"
+  const isMultiple = !loadingEvents && events.length > 1
+  const eventsTitle = loadingEvents ? "Wydarzenie" : events.length <= 1 ? "Wydarzenie" : "Wydarzenia"
 
   return (
     <div className="grid gap-8 px-4 py-4 md:px-0">
@@ -297,7 +153,7 @@ export default function RezerwacjeBiznesPage() {
         </span>
         <span className="flex items-center gap-1.5">
           <Banknote aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-          Płatność na miejscu
+          Płatność online
         </span>
         <span className="flex items-center gap-1.5">
           <Users aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
@@ -310,59 +166,62 @@ export default function RezerwacjeBiznesPage() {
         <div className="flex items-center gap-4">
           <h2 className="whitespace-nowrap text-xl font-bold tracking-tight">{eventsTitle}</h2>
           <div className="h-px flex-1 bg-border" />
+          {isMultiple && (
+            <DotNav api={api} label="Nawigacja karuzeli wydarzeń biznesowych" variant="numbers" />
+          )}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          <AnimatePresence mode="wait" initial={false}>
-            {loadingEvents ? (
-              <MotionWrap k="biz-events-loading" className="p-6">
-                <div role="status" aria-live="polite">
-                  <EventsSkeleton />
-                </div>
-              </MotionWrap>
-            ) : !events.length ? (
-              <MotionWrap
-                k="biz-events-empty"
-                className="flex flex-col items-center justify-center px-6 py-12 text-center"
+        <AnimatePresence mode="wait" initial={false}>
+          {loadingEvents ? (
+            <MotionWrap k="biz-events-loading">
+              <div className="overflow-hidden rounded-2xl border bg-card p-8 flex items-center justify-center min-h-[200px]" role="status" aria-live="polite">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-black/20 border-t-black" />
+              </div>
+            </MotionWrap>
+          ) : !events.length ? (
+            <MotionWrap
+              k="biz-events-empty"
+              className="overflow-hidden rounded-2xl border bg-card flex flex-col items-center justify-center px-6 py-12 text-center"
+            >
+              <CalendarDays aria-hidden="true" className="mb-3 h-10 w-10 text-muted-foreground/40" />
+              <p className="font-medium text-foreground" role="status" aria-live="polite">
+                Brak nadchodzących wydarzeń
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Sprawdź ponownie wkrótce lub wyślij zapytanie poniżej.
+              </p>
+            </MotionWrap>
+          ) : events.length === 1 ? (
+            <MotionWrap k="biz-events-single">
+              <EventSlide
+                e={events[0]!}
+                href={`/rezerwacje/biznes?eventId=${events[0]!.id}`}
+                ctaLabel="Zapisz się"
+              />
+            </MotionWrap>
+          ) : (
+            <MotionWrap k="biz-events-carousel">
+              <Carousel
+                aria-label="Karuzela wydarzeń biznesowych"
+                opts={{ align: "start", loop: true, containScroll: "trimSnaps", slidesToScroll: 1 }}
+                setApi={setApi as any}
+                className="w-full overflow-hidden"
               >
-                <CalendarDays aria-hidden="true" className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p className="font-medium text-foreground" role="status" aria-live="polite">
-                  Brak nadchodzących wydarzeń
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Sprawdź ponownie wkrótce lub wyślij zapytanie poniżej.
-                </p>
-              </MotionWrap>
-            ) : events.length === 1 ? (
-              <MotionWrap k="biz-events-single" className="p-6">
-                <EventSlide e={events[0]!} onSignup={handleSignupClick} showSignupButton={hasBusinessEvents} />
-              </MotionWrap>
-            ) : (
-              <MotionWrap k="biz-events-carousel" className="p-6">
-                <div className="relative w-full overflow-hidden">
-                  <Carousel
-                    aria-label="Karuzela wydarzeń biznesowych"
-                    opts={{ align: "start", loop: true, containScroll: "trimSnaps", slidesToScroll: 1 }}
-                    setApi={setApi as any}
-                    className="w-full overflow-hidden"
-                  >
-                    <CarouselContent className="-ml-4">
-                      {events.map((e) => (
-                        <CarouselItem key={String(e.id)} className="pl-4 basis-full">
-                          <EventSlide e={e} onSignup={handleSignupClick} showSignupButton={hasBusinessEvents} />
-                        </CarouselItem>
-                      ))}
-                    </CarouselContent>
-                  </Carousel>
-
-                  <div className="mt-3 hidden justify-center md:flex">
-                    <DotNav api={api} label="Nawigacja karuzeli wydarzeń biznesowych" />
-                  </div>
-                </div>
-              </MotionWrap>
-            )}
-          </AnimatePresence>
-        </div>
+                <CarouselContent className="-ml-4">
+                  {events.map((e) => (
+                    <CarouselItem key={String(e.id)} className="pl-4 basis-full">
+                      <EventSlide
+                        e={e}
+                        href={`/rezerwacje/biznes?eventId=${e.id}`}
+                        ctaLabel="Zapisz się"
+                      />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </Carousel>
+            </MotionWrap>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* CTA + organizer form */}

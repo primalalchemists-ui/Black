@@ -50,6 +50,7 @@ type Props = {
 
   // ✅ NOWE: parent może ukryć przycisk/tekst dopóki grid nie gotowy
   onLoadingChange?: (v: { loading: boolean; ready: boolean }) => void;
+  onEnabledChange?: (v: { enabled: boolean; disabledMessage: string | null }) => void;
 };
 
 function parseHHMM(t: string) {
@@ -92,6 +93,7 @@ export function ResourceGrid({
   date,
   onChange,
   onLoadingChange,
+  onEnabledChange,
 }: Props) {
   const shouldFetch = Boolean(type && date);
 
@@ -292,6 +294,11 @@ export function ResourceGrid({
   }, [onLoadingChange, isGatedLoading, ready]);
 
   useEffect(() => {
+    if (!fetchedOnce) return;
+    onEnabledChange?.({ enabled, disabledMessage });
+  }, [onEnabledChange, fetchedOnce, enabled, disabledMessage]);
+
+  useEffect(() => {
     setSegments([]);
   }, [type, date]);
 
@@ -312,13 +319,6 @@ export function ResourceGrid({
             Każdy {resourceLabel.toLowerCase()} wybierasz <b>osobno</b>. Klikasz kolejne godziny <b>ciągiem</b>, a klik w już
             wybrane usuwa wybór.
           </div>
-
-          {!enabled ? (
-            <div className="rounded-lg border p-4 text-sm">
-              <div className="font-medium">Rezerwacje wyłączone</div>
-              <div className="text-muted-foreground">{disabledMessage || "Usługa jest chwilowo wyłączona."}</div>
-            </div>
-          ) : null}
 
           <div className="overflow-x-auto mt-8">
             <div className="min-w-[720px]">

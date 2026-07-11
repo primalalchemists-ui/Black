@@ -1,451 +1,264 @@
-// import { NextResponse } from "next/server";
-// import { getPayload } from "payload";
-// import config from "@payload-config";
+import { NextResponse } from "next/server"
+import { getPayload } from "payload"
+import config from "@payload-config"
+import { z } from "zod"
 
-// import { businessRequestSchema } from "@/lib/validation/reservations";
-// import { getMailTransport, getMailFrom, getOwnerTo } from "@/lib/mail";
-// import { reservationClientText, reservationOwnerText } from "@/lib/mailTemplates";
-// import { getEventDisplayDateTimePL } from "@/lib/cms/events";
+import { getMailClient, getMailFrom, getOwnerTo, effectiveTo } from "@/lib/mail"
+import { eventClientText, eventClientHtml, eventOwnerText, eventOwnerHtml } from "@/lib/mailTemplates"
+import { getEventDisplayDateTimePL } from "@/lib/cms/events"
+import { registerTransaction } from "@/lib/p24"
+import { getNextReservationNumber } from "../_shared"
+import { getBlockingEvent } from "@/lib/openingHours"
 
-// // Ważne na Railway/Next build: nie prerenderuj / nie collect page data dla route handlers
-// export const dynamic = "force-dynamic";
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-// type Issue = { path: (string | number)[]; message: string };
+const CONTACT_MSG = "Nie udało się przetworzyć rezerwacji. Skontaktuj się z obsługą lokalu: 601 275 261."
+const PAYMENT_CONTACT_MSG = "Nie udało się przetworzyć płatności. Skontaktuj się z obsługą lokalu: 601 275 261."
 
-// function json400(error: string, issues?: Issue[], extra?: any) {
-//   return NextResponse.json({ error, issues: issues ?? [], ...extra }, { status: 400 });
-// }
-
-// function json409(error: string, issues?: Issue[], extra?: any) {
-//   return NextResponse.json({ error, issues: issues ?? [], ...extra }, { status: 409 });
-// }
-
-// async function decrementCapacityOrFail(payload: any, eventId: string) {
-//   const pool = (payload.db as any)?.pool;
-//   if (!pool?.query) throw new Error("payload.db.pool not available (Postgres adapter).");
-
-//   const r = await pool.query(
-//     `UPDATE "events"
-//      SET "capacity" = "capacity" - 1
-//      WHERE "id" = $1 AND "capacity" > 0
-//      RETURNING "capacity"`,
-//     [eventId],
-//   );
-
-//   return (r?.rowCount ?? 0) > 0;
-// }
-
-// async function incrementCapacity(payload: any, eventId: string) {
-//   const pool = (payload.db as any)?.pool;
-//   if (!pool?.query) return;
-//   await pool.query(`UPDATE "events" SET "capacity" = "capacity" + 1 WHERE "id" = $1`, [eventId]);
-// }
-
-// export async function POST(req: Request) {
-//   const payload = await getPayload({ config });
-
-//   const body = await req.json().catch(() => null);
-
-//   const parsed = businessRequestSchema.safeParse(body);
-//   if (!parsed.success) {
-//     return json400(
-//       "VALIDATION_ERROR",
-//       parsed.error.issues.map((i) => ({ path: i.path, message: i.message })),
-//     );
-//   }
-
-//   const data = parsed.data;
-
-//   if (!data.eventId) {
-//     return json400("VALIDATION_ERROR", [{ path: ["eventId"], message: "Brak eventId." }]);
-//   }
-
-//   const eventId = String(data.eventId);
-
-//   // pobierz event
-//   let event: any;
-//   try {
-//     event = await payload.findByID({ collection: "events", id: eventId });
-//   } catch (e: any) {
-//     return json400(
-//       "EVENT_NOT_FOUND",
-//       [{ path: ["eventId"], message: "Nie znaleziono wydarzenia." }],
-//       { message: e?.message },
-//     );
-//   }
-
-//   if (!event || !event.published || event.status !== "planned" || !event.registrationsEnabled) {
-//     return json409("NO_AVAILABILITY", [
-//       { path: ["eventId"], message: "Zapisy na to wydarzenie są wyłączone." },
-//     ]);
-//   }
-
-//   const startsAt = new Date(event.startsAt);
-//   const endsAt = event.endsAt ? new Date(event.endsAt) : null;
-
-//   const dayISO = event.day ? new Date(event.day).toISOString() : new Date(startsAt).toISOString();
-//   const startHour = String(startsAt.getHours());
-//   const startMinute = String(startsAt.getMinutes());
-//   const endHour = endsAt ? String(endsAt.getHours()) : undefined;
-//   const endMinute = endsAt ? String(endsAt.getMinutes()) : undefined;
-
-//   // ✅ KWOTA Z EVENTU (do zapisania w rezerwacji)
-//   const pricePLN = typeof event?.pricePLN === "number" ? event.pricePLN : 0;
-
-//   // capacity atomowo
-//   let decremented = false;
-//   if (event.capacity != null) {
-//     try {
-//       const ok = await decrementCapacityOrFail(payload, eventId);
-//       if (!ok) {
-//         return json409("NO_AVAILABILITY", [
-//           { path: ["eventId"], message: "Brak wolnych miejsc (limit wyczerpany)." },
-//         ]);
-//       }
-//       decremented = true;
-//     } catch (e: any) {
-//       return json400(
-//         "CAPACITY_UPDATE_FAILED",
-//         [{ path: ["eventId"], message: "Nie udało się zaktualizować limitu miejsc." }],
-//         { message: e?.message },
-//       );
-//     }
-//   }
-
-//   try {
-//     const reservationDoc = await payload.create({
-//       collection: "reservations",
-//       data: {
-//         type: "biznes",
-//         event: eventId,
-
-//         customer: {
-//           firstName: data.firstName,
-//           lastName: data.lastName,
-//           phone: data.phone,
-//           email: data.email,
-//         },
-
-//         notes: data.notes || "",
-
-//         day: dayISO,
-//         allDay: false,
-//         startHour,
-//         startMinute,
-//         endHour,
-//         endMinute,
-
-//         startsAt: startsAt.toISOString(),
-//         endsAt: endsAt ? endsAt.toISOString() : undefined,
-
-//         disabledPerson: Boolean(data.disabledPerson),
-//         disabilityDetails: data.disabilityDetails || "",
-
-//         invoice: {
-//           wantInvoice: Boolean(data.wantInvoice),
-//           nip: data.nip || "",
-//         },
-
-//         acceptRules: Boolean(data.acceptRules),
-
-//         source: "online",
-//         status: "new",
-
-//         // ✅ płatność na miejscu -> czeka na opłacenie
-//         paymentStatus: "pending",
-
-//         // ✅ TU ZAPISUJEMY KWOTĘ Z EVENTU
-//         depositRequired: pricePLN > 0,
-//         depositAmount: pricePLN,
-//       },
-//     });
-
-//     // ====== MAIL SECTION ======
-//     // Mail jest "best-effort": jeśli env od maila nie jest ustawione, rezerwacja ma się nadal utworzyć.
-//     try {
-//       const dt = getEventDisplayDateTimePL(event);
-//       const eventTitle = event?.title ?? "Wydarzenie biznesowe";
-//       const dateLabel = dt?.date ?? "—";
-//       const timeLabel = dt?.time ?? "—";
-
-//       const from = getMailFrom();
-//       const ownerTo = getOwnerTo();
-//       const mailTransport = getMailTransport();
-
-//       await mailTransport.sendMail({
-//         from,
-//         to: ownerTo,
-//         subject: `Rezerwacja: ${eventTitle} — ${data.firstName} ${data.lastName}`,
-//         text: reservationOwnerText({
-//           eventTitle,
-//           dateLabel,
-//           timeLabel,
-//           pricePLN,
-//           firstName: data.firstName,
-//           lastName: data.lastName,
-//           phone: data.phone,
-//           email: data.email,
-//           disabledPerson: Boolean(data.disabledPerson),
-//           disabilityDetails: data.disabilityDetails || "",
-//           wantInvoice: Boolean(data.wantInvoice),
-//           nip: data.nip || "",
-//           notes: data.notes || "",
-//         }),
-//         replyTo: data.email,
-//       });
-
-//       await mailTransport.sendMail({
-//         from,
-//         to: data.email,
-//         subject: `Potwierdzenie rezerwacji: ${eventTitle}`,
-//         text: reservationClientText({
-//           firstName: data.firstName,
-//           lastName: data.lastName,
-//           eventTitle,
-//           dateLabel,
-//           timeLabel,
-//           pricePLN,
-//         }),
-//       });
-//     } catch (mailErr: any) {
-//       console.warn("[MAIL] skipped / failed:", mailErr?.message || mailErr);
-//     }
-//     // ====== /MAIL SECTION ======
-
-//     return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
-//   } catch (e: any) {
-//     if (decremented) await incrementCapacity(payload, eventId);
-
-//     const msg = e?.message || "Unknown error";
-//     return json400(
-//       "CREATE_FAILED",
-//       [{ path: [], message: "Nie udało się utworzyć rezerwacji." }],
-//       { message: msg },
-//     );
-//   }
-// }
-
-import { NextResponse } from "next/server";
-import { getPayload } from "payload";
-import config from "@payload-config";
-
-import { businessRequestSchema } from "@/lib/validation/reservations";
-import { getMailClient, getMailFrom, getOwnerTo } from "@/lib/mail";
-import { reservationClientText, reservationOwnerText } from "@/lib/mailTemplates";
-import { getEventDisplayDateTimePL } from "@/lib/cms/events";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-type Issue = { path: (string | number)[]; message: string };
-
-function json400(error: string, issues?: Issue[], extra?: any) {
-  return NextResponse.json({ error, issues: issues ?? [], ...extra }, { status: 400 });
-}
-
-function json409(error: string, issues?: Issue[], extra?: any) {
-  return NextResponse.json({ error, issues: issues ?? [], ...extra }, { status: 409 });
-}
-
-async function decrementCapacityOrFail(payload: any, eventId: string) {
-  const pool = (payload.db as any)?.pool;
-  if (!pool?.query) throw new Error("payload.db.pool not available (Postgres adapter).");
-
-  const r = await pool.query(
-    `UPDATE "events"
-     SET "capacity" = "capacity" - 1
-     WHERE "id" = $1 AND "capacity" > 0
-     RETURNING "capacity"`,
-    [eventId],
-  );
-
-  return (r?.rowCount ?? 0) > 0;
-}
-
-async function incrementCapacity(payload: any, eventId: string) {
-  const pool = (payload.db as any)?.pool;
-  if (!pool?.query) return;
-  await pool.query(`UPDATE "events" SET "capacity" = "capacity" + 1 WHERE "id" = $1`, [eventId]);
-}
+const schema = z.object({
+  eventId: z.string().min(1, "Brak eventId"),
+  firstName: z.string().min(1, "Imię jest wymagane"),
+  lastName: z.string().min(1, "Nazwisko jest wymagane"),
+  phone: z.string().min(7, "Podaj numer telefonu"),
+  email: z.string().email("Podaj poprawny adres e-mail"),
+  partySize: z.number().int().min(1, "Minimalna liczba osób: 1").optional().default(1),
+  notes: z.string().optional(),
+  disabledPerson: z.boolean().optional(),
+  disabilityDetails: z.string().optional(),
+  wantInvoice: z.boolean().optional(),
+  invoiceType: z.string().optional(),
+  nip: z.string().optional(),
+  acceptRules: z.literal(true, { errorMap: () => ({ message: "Akceptacja regulaminu jest wymagana" }) }),
+})
 
 export async function POST(req: Request) {
-  const payload = await getPayload({ config });
-
-  const body = await req.json().catch(() => null);
-
-  const parsed = businessRequestSchema.safeParse(body);
-  if (!parsed.success) {
-    return json400(
-      "VALIDATION_ERROR",
-      parsed.error.issues.map((i) => ({ path: i.path, message: i.message })),
-    );
-  }
-
-  const data = parsed.data;
-
-  if (!data.eventId) {
-    return json400("VALIDATION_ERROR", [{ path: ["eventId"], message: "Brak eventId." }]);
-  }
-
-  const eventId = String(data.eventId);
-
-  // pobierz event
-  let event: any;
   try {
-    event = await payload.findByID({ collection: "events", id: eventId });
-  } catch (e: any) {
-    return json400(
-      "EVENT_NOT_FOUND",
-      [{ path: ["eventId"], message: "Nie znaleziono wydarzenia." }],
-      { message: e?.message },
-    );
-  }
+    const payload = await getPayload({ config })
 
-  if (!event || !event.published || event.status !== "planned" || !event.registrationsEnabled) {
-    return json409("NO_AVAILABILITY", [
-      { path: ["eventId"], message: "Zapisy na to wydarzenie są wyłączone." },
-    ]);
-  }
-
-  const startsAt = new Date(event.startsAt);
-  const endsAt = event.endsAt ? new Date(event.endsAt) : null;
-
-  const dayISO = event.day ? new Date(event.day).toISOString() : new Date(startsAt).toISOString();
-  const startHour = String(startsAt.getHours());
-  const startMinute = String(startsAt.getMinutes());
-  const endHour = endsAt ? String(endsAt.getHours()) : undefined;
-  const endMinute = endsAt ? String(endsAt.getMinutes()) : undefined;
-
-  // ✅ KWOTA Z EVENTU (do zapisania w rezerwacji)
-  const pricePLN = typeof event?.pricePLN === "number" ? event.pricePLN : 0;
-
-  // capacity atomowo
-  let decremented = false;
-  if (event.capacity != null) {
-    try {
-      const ok = await decrementCapacityOrFail(payload, eventId);
-      if (!ok) {
-        return json409("NO_AVAILABILITY", [
-          { path: ["eventId"], message: "Brak wolnych miejsc (limit wyczerpany)." },
-        ]);
-      }
-      decremented = true;
-    } catch (e: any) {
-      return json400(
-        "CAPACITY_UPDATE_FAILED",
-        [{ path: ["eventId"], message: "Nie udało się zaktualizować limitu miejsc." }],
-        { message: e?.message },
-      );
+    const body = await req.json().catch(() => null)
+    if (!body) {
+      return NextResponse.json({ error: "BAD_JSON", message: "Niepoprawne dane." }, { status: 400 })
     }
-  }
 
-  try {
+    const parsed = schema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) },
+        { status: 400 },
+      )
+    }
+
+    const data = parsed.data
+    const eventId = data.eventId
+
+    // 1. Pobierz event
+    let event: any
+    try {
+      event = await payload.findByID({ collection: "events", id: eventId, overrideAccess: true, context: { skipTakenSeats: true } as any })
+    } catch {
+      return NextResponse.json({ error: "EVENT_NOT_FOUND", message: "Nie znaleziono wydarzenia." }, { status: 404 })
+    }
+
+    if (!event || !event.published || event.status !== "planned") {
+      console.log(`[biznes] 409 event_unavailable eventId=${eventId} published=${event?.published} status=${event?.status}`)
+      return NextResponse.json({ error: "NO_AVAILABILITY", message: "Wydarzenie niedostępne." }, { status: 409 })
+    }
+
+    if (!event.registrationsEnabled) {
+      console.log(`[biznes] 409 registrations_disabled eventId=${eventId}`)
+      return NextResponse.json({ error: "NO_AVAILABILITY", message: "Zapisy na to wydarzenie są wyłączone." }, { status: 409 })
+    }
+
+    if (event.kind !== "biznes") {
+      console.log(`[biznes] 409 wrong_kind eventId=${eventId} kind=${event.kind}`)
+      return NextResponse.json({ error: "NO_AVAILABILITY", message: "To wydarzenie nie obsługuje zapisów online." }, { status: 409 })
+    }
+
+    // Walidacja NIP tylko dla firmy
+    if (data.wantInvoice && data.invoiceType === "company") {
+      const nip = (data.nip ?? "").replace(/\D/g, "")
+      if (nip.length !== 10) {
+        return NextResponse.json(
+          { error: "VALIDATION_ERROR", issues: [{ path: ["nip"], message: "NIP musi mieć 10 cyfr." }] },
+          { status: 400 },
+        )
+      }
+    }
+
+    // 2. Sprawdź capacity (partySize-based)
+    const capacity = typeof event.capacity === "number" && event.capacity > 0 ? event.capacity : null
+    if (capacity !== null) {
+      const takenDocs = await payload.find({
+        collection: "reservations",
+        limit: 5000,
+        overrideAccess: true,
+        where: {
+          and: [
+            { type: { equals: "biznes" } },
+            { event: { equals: eventId } },
+            { status: { in: ["new", "confirmed"] } },
+          ],
+        },
+      })
+      const takenSeats = (takenDocs.docs as any[]).reduce((sum, r) => sum + (Number(r.partySize) || 1), 0)
+      if (takenSeats + (data.partySize ?? 1) > capacity) {
+        console.log(`[biznes] 409 capacity_exceeded eventId=${eventId} capacity=${capacity} takenSeats=${takenSeats} requested=${data.partySize ?? 1}`)
+        return NextResponse.json(
+          { error: "NO_AVAILABILITY", message: "Brak wystarczającej liczby miejsc na to wydarzenie." },
+          { status: 409 },
+        )
+      }
+    }
+
+    // 3. Sprawdź blokadę lokalu
+    if (event.day) {
+      const dayStr = new Date(event.day).toISOString().slice(0, 10)
+      const blockCheck = await getBlockingEvent(
+        dayStr,
+        event.allDay ? undefined : Number(event.startHour ?? 0),
+        event.allDay ? undefined : Number(event.startMinute ?? 0),
+      )
+      if (blockCheck.blocked && blockCheck.eventTitle !== event.title) {
+        console.log(`[biznes] 409 venue_blocked eventId=${eventId} blockingEvent="${blockCheck.eventTitle}" thisEvent="${event.title}"`)
+        return NextResponse.json(
+          { error: "VENUE_BLOCKED", message: "Lokal jest zarezerwowany na inne wydarzenie." },
+          { status: 409 },
+        )
+      }
+    }
+
+    // 4. groupId + reservationNumber
+    const groupId = crypto.randomUUID()
+    const reservationNumber = await getNextReservationNumber(payload, "W")
+
+    const pricePLN = typeof event.pricePLN === "number" ? event.pricePLN : 0
+    const requiresPayment = pricePLN > 0
+
+    const startsAt = event.startsAt ? new Date(event.startsAt) : null
+    const endsAt = event.endsAt ? new Date(event.endsAt) : null
+    const dayISO = event.day ? new Date(event.day).toISOString() : (startsAt?.toISOString() ?? new Date().toISOString())
+
+    // 5. Stwórz rezerwację
     const reservationDoc = await payload.create({
       collection: "reservations",
+      overrideAccess: true,
       data: {
         type: "biznes",
         event: eventId,
-
-        customer: {
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          email: data.email,
-        },
-
+        groupId,
+        reservationNumber,
+        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
         notes: data.notes || "",
-
         day: dayISO,
-        allDay: false,
-        startHour,
-        startMinute,
-        endHour,
-        endMinute,
-
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt ? endsAt.toISOString() : undefined,
-
+        allDay: Boolean(event.allDay),
+        startHour: String(event.startHour ?? "18"),
+        startMinute: String(event.startMinute ?? "0"),
+        endHour: event.endHour != null ? String(event.endHour) : undefined,
+        endMinute: event.endMinute != null ? String(event.endMinute) : undefined,
+        startsAt: startsAt?.toISOString() ?? dayISO,
+        endsAt: endsAt?.toISOString() ?? undefined,
+        partySize: data.partySize ?? 1,
         disabledPerson: Boolean(data.disabledPerson),
         disabilityDetails: data.disabilityDetails || "",
-
         invoice: {
           wantInvoice: Boolean(data.wantInvoice),
+          invoiceType: data.invoiceType || undefined,
           nip: data.nip || "",
         },
-
-        acceptRules: Boolean(data.acceptRules),
-
+        acceptRules: true,
         source: "online",
         status: "new",
-
-        paymentStatus: "pending",
-
+        paymentStatus: requiresPayment ? "pending" : "not_required",
         depositRequired: pricePLN > 0,
-        depositAmount: pricePLN,
-      },
-    });
+        depositAmount: pricePLN > 0 ? pricePLN * (data.partySize ?? 1) : 0,
+        ...(requiresPayment ? { paymentProvider: "p24" } : {}),
+      } as any,
+    })
 
-    // ====== MAIL SECTION ======
-    // Mail jest "best-effort": jeśli env od maila nie jest ustawione, rezerwacja ma się nadal utworzyć.
+    console.log(`[biznes] created reservationNumber=${reservationNumber} groupId=${groupId} eventId=${eventId} requiresPayment=${requiresPayment}`)
+
+    // 6. Płatność P24
+    if (requiresPayment) {
+      const amountGrosze = Math.round(pricePLN * (data.partySize ?? 1) * 100)
+      try {
+        const p24Result = await registerTransaction({
+          sessionId: groupId,
+          amount: amountGrosze,
+          description: `Biznes: ${event.title}`,
+          email: data.email,
+        })
+
+        console.log(`[biznes] P24 payUrl=${p24Result.payUrl} groupId=${groupId}`)
+        return NextResponse.json({ ok: true, redirectUrl: p24Result.payUrl, groupId, reservationNumber })
+      } catch (p24Err: any) {
+        console.error("[biznes] P24 error:", p24Err?.message ?? p24Err)
+        await payload.delete({ collection: "reservations", id: reservationDoc.id, overrideAccess: true }).catch(() => {})
+        return NextResponse.json({ error: "PAYMENT_ERROR", message: PAYMENT_CONTACT_MSG }, { status: 502 })
+      }
+    }
+
+    // 7. Darmowe lub płatność na miejscu — wyślij maile od razu
+    const dt = getEventDisplayDateTimePL(event)
     try {
-      const dt = getEventDisplayDateTimePL(event);
-      const eventTitle = event?.title ?? "Wydarzenie biznesowe";
-      const dateLabel = dt?.date ?? "—";
-      const timeLabel = dt?.time ?? "—";
+      const mail = getMailClient()
+      const from = getMailFrom()
+      const ownerTo = getOwnerTo()
 
-      const from = getMailFrom();
-      const ownerTo = getOwnerTo();
-      const resend = getMailClient();
+      const emailParams = {
+        type: "biznes" as const,
+        reservationNumber,
+        eventTitle: event.title,
+        dateLabel: dt?.date ?? "—",
+        timeLabel: dt?.time ?? "—",
+        partySize: data.partySize ?? 1,
+        totalPLN: pricePLN * (data.partySize ?? 1),
+        paymentStatus: "not_required" as const,
+      }
 
-      await resend.emails.send({
+      await mail.emails.send({
         from,
-        to: ownerTo,
-        subject: `Rezerwacja: ${eventTitle} — ${data.firstName} ${data.lastName}`,
-        text: reservationOwnerText({
-          eventTitle,
-          dateLabel,
-          timeLabel,
-          pricePLN,
+        to: effectiveTo(data.email),
+        subject: `Potwierdzenie zapisu: ${event.title} — ${reservationNumber}`,
+        text: eventClientText({ ...emailParams, firstName: data.firstName }),
+        html: eventClientHtml({ ...emailParams, firstName: data.firstName }),
+      })
+
+      await mail.emails.send({
+        from,
+        to: effectiveTo(ownerTo),
+        subject: `Nowy zapis — Biznes: ${event.title}`,
+        text: eventOwnerText({
+          ...emailParams,
           firstName: data.firstName,
           lastName: data.lastName,
           phone: data.phone,
           email: data.email,
-          disabledPerson: Boolean(data.disabledPerson),
-          disabilityDetails: data.disabilityDetails || "",
           wantInvoice: Boolean(data.wantInvoice),
-          nip: data.nip || "",
-          notes: data.notes || "",
+          invoiceType: data.invoiceType ?? "",
+          nip: data.nip ?? "",
+          notes: data.notes ?? "",
         }),
-        reply_to: data.email,
-      });
-
-      await resend.emails.send({
-        from,
-        to: data.email,
-        subject: `Potwierdzenie rezerwacji: ${eventTitle}`,
-        text: reservationClientText({
+        html: eventOwnerHtml({
+          ...emailParams,
           firstName: data.firstName,
           lastName: data.lastName,
-          eventTitle,
-          dateLabel,
-          timeLabel,
-          pricePLN,
+          phone: data.phone,
+          email: data.email,
+          wantInvoice: Boolean(data.wantInvoice),
+          invoiceType: data.invoiceType ?? "",
+          nip: data.nip ?? "",
+          notes: data.notes ?? "",
         }),
-      });
+        reply_to: data.email,
+      })
     } catch (mailErr: any) {
-      console.warn("[MAIL] skipped / failed:", mailErr?.message || mailErr);
+      console.warn("[biznes] mail skipped:", mailErr?.message ?? mailErr)
     }
-    // ====== /MAIL SECTION ======
 
-    return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
-  } catch (e: any) {
-    if (decremented) await incrementCapacity(payload, eventId);
-
-    const msg = e?.message || "Unknown error";
-    return json400(
-      "CREATE_FAILED",
-      [{ path: [], message: "Nie udało się utworzyć rezerwacji." }],
-      { message: msg },
-    );
+    return NextResponse.json({ ok: true, groupId, reservationNumber })
+  } catch (err: any) {
+    console.error("[biznes] POST error:", err?.message ?? err)
+    return NextResponse.json({ error: "INTERNAL_ERROR", message: CONTACT_MSG }, { status: 500 })
   }
 }

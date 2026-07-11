@@ -52,6 +52,40 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    components: {
+      graphics: {
+        Logo: '@/components/admin/AdminLogo#AdminLogo',
+        Icon: '@/components/admin/AdminIcon#AdminIcon',
+      },
+    },
+    meta: {
+      titleSuffix: ' — BLACK',
+    },
+  },
+
+  i18n: {
+    fallbackLanguage: 'en',
+    translations: {
+      en: {
+        general: {
+          createNew: 'Dodaj nowy',
+          noResults: 'Brak wyników',
+          filters: 'Filtry',
+          columns: 'Kolumny',
+          searchBy: 'Szukaj',
+          save: 'Zapisz',
+          cancel: 'Anuluj',
+          delete: 'Usuń',
+          edit: 'Edytuj',
+          createdAt: 'Utworzono',
+          updatedAt: 'Zaktualizowano',
+        },
+        authentication: {
+          login: 'Zaloguj się',
+          forgotPasswordQuestion: 'Nie pamiętasz hasła?',
+        },
+      },
+    },
   },
 
   collections: [
@@ -81,6 +115,7 @@ export default buildConfig({
     pool: {
       connectionString: DATABASE_URL,
     },
+    push: false,
   }),
 
   plugins: [

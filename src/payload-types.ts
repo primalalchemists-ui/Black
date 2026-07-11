@@ -192,46 +192,39 @@ export interface Event {
   id: number;
   title: string;
   description?: string | null;
-  kind: 'promo' | 'business' | 'party' | 'sport';
+  kind?: ('impreza' | 'biznes') | null;
   /**
-   * Opcjonalne. Ustaw np. dla wydarzeń biznesowych lub biletowanych. 0 = darmowe.
+   * Dla darmowych wydarzeń ustaw 0.
    */
   pricePLN?: number | null;
   status: 'planned' | 'cancelled';
-  /**
-   * Wybierz dzień wydarzenia. Godzinę i minutę ustawisz poniżej.
-   */
   day: string;
-  allDay?: boolean | null;
-  startHour?:
-    | (
-        | '0'
-        | '1'
-        | '2'
-        | '3'
-        | '4'
-        | '5'
-        | '6'
-        | '7'
-        | '8'
-        | '9'
-        | '10'
-        | '11'
-        | '12'
-        | '13'
-        | '14'
-        | '15'
-        | '16'
-        | '17'
-        | '18'
-        | '19'
-        | '20'
-        | '21'
-        | '22'
-        | '23'
-      )
-    | null;
-  startMinute?: ('0' | '15' | '30' | '45') | null;
+  startHour:
+    | '0'
+    | '1'
+    | '2'
+    | '3'
+    | '4'
+    | '5'
+    | '6'
+    | '7'
+    | '8'
+    | '9'
+    | '10'
+    | '11'
+    | '12'
+    | '13'
+    | '14'
+    | '15'
+    | '16'
+    | '17'
+    | '18'
+    | '19'
+    | '20'
+    | '21'
+    | '22'
+    | '23';
+  startMinute: '0' | '15' | '30' | '45';
   endHour?:
     | (
         | '0'
@@ -263,10 +256,14 @@ export interface Event {
   endMinute?: ('0' | '15' | '30' | '45') | null;
   startsAt: string;
   endsAt?: string | null;
+  showOnHomepage?: boolean | null;
+  blocksVenue?: boolean | null;
+  blockAllDay?: boolean | null;
   image?: (number | null) | Media;
   capacity?: number | null;
   registrationsEnabled?: boolean | null;
   published?: boolean | null;
+  takenSeats?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -324,7 +321,7 @@ export interface Resource {
  */
 export interface Reservation {
   id: number;
-  type: 'stolik' | 'kregle' | 'bilard' | 'biznes';
+  type: 'stolik' | 'kregle' | 'bilard' | 'impreza' | 'biznes';
   customer: {
     firstName: string;
     lastName: string;
@@ -332,9 +329,6 @@ export interface Reservation {
     email?: string | null;
   };
   notes?: string | null;
-  /**
-   * Wybierz dzień rezerwacji. Godzinę i minutę ustawisz poniżej.
-   */
   day: string;
   allDay?: boolean | null;
   startHour?:
@@ -398,22 +392,14 @@ export interface Reservation {
   startsAt: string;
   endsAt?: string | null;
   partySize?: number | null;
-  /**
-   * Zawsze 1 dla rezerwacji online (tablesCount nie odzwierciedla fizycznych stolików).
-   */
   tablesCount?: number | null;
-  /**
-   * Najpierw wybierz typ rezerwacji (Kręgle/Bilard) — lista zasobów przefiltruje się automatycznie.
-   */
   resources?: (number | Resource)[] | null;
   event?: (number | null) | Event;
   disabledPerson?: boolean | null;
   disabilityDetails?: string | null;
   invoice?: {
     wantInvoice?: boolean | null;
-    /**
-     * Pole wymagane, jeśli klient chce fakturę.
-     */
+    invoiceType?: ('personal' | 'company') | null;
     nip?: string | null;
   };
   acceptRules: boolean;
@@ -421,9 +407,11 @@ export interface Reservation {
   status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'completed';
   depositRequired?: boolean | null;
   depositAmount?: number | null;
-  paymentStatus: 'not_required' | 'pending' | 'paid' | 'failed' | 'refunded' | 'forfeited';
+  paymentStatus?: ('not_required' | 'pending' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
   paymentProvider?: 'p24' | null;
   payment?: (number | null) | Payment;
+  groupId?: string | null;
+  reservationNumber?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -460,9 +448,6 @@ export interface Payment {
 export interface OccasionalInquiry {
   id: number;
   type: 'komunia' | 'stypa' | 'urodziny' | 'inne';
-  /**
-   * Wybierz dzień imprezy. Godziny ustawisz poniżej.
-   */
   date: string;
   allDay?: boolean | null;
   startHour?:
@@ -547,9 +532,6 @@ export interface Blackout {
   id: number;
   title: string;
   service: 'bowling' | 'billiard';
-  /**
-   * Wybierz dzień blokady. Godzinę i minutę ustawisz poniżej.
-   */
   day: string;
   allDay?: boolean | null;
   startHour?:
@@ -610,9 +592,6 @@ export interface Blackout {
       )
     | null;
   endMinute?: ('0' | '15' | '30' | '45') | null;
-  /**
-   * Najpierw wybierz usługę — lista zasobów przefiltruje się automatycznie.
-   */
   resources?: (number | Resource)[] | null;
   reason?: string | null;
   active?: boolean | null;
@@ -777,17 +756,20 @@ export interface EventsSelect<T extends boolean = true> {
   pricePLN?: T;
   status?: T;
   day?: T;
-  allDay?: T;
   startHour?: T;
   startMinute?: T;
   endHour?: T;
   endMinute?: T;
   startsAt?: T;
   endsAt?: T;
+  showOnHomepage?: T;
+  blocksVenue?: T;
+  blockAllDay?: T;
   image?: T;
   capacity?: T;
   registrationsEnabled?: T;
   published?: T;
+  takenSeats?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -871,6 +853,7 @@ export interface ReservationsSelect<T extends boolean = true> {
     | T
     | {
         wantInvoice?: T;
+        invoiceType?: T;
         nip?: T;
       };
   acceptRules?: T;
@@ -881,6 +864,8 @@ export interface ReservationsSelect<T extends boolean = true> {
   paymentStatus?: T;
   paymentProvider?: T;
   payment?: T;
+  groupId?: T;
+  reservationNumber?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1038,29 +1023,16 @@ export interface ReservationSetting {
   id: number;
   tables: {
     enabled?: boolean | null;
-    /**
-     * Np. "Rezerwacje stolików są chwilowo wyłączone. Zadzwoń do nas."
-     */
     disabledMessage?: string | null;
-    /**
-     * Maksymalna liczba osób, które mogą mieć aktywną rezerwację online w tym samym czasie. To nie jest liczba fizycznych stolików.
-     */
     availableTablesCount: number;
-    /**
-     * Przez ile minut miejsca są blokowane po wybranej godzinie rezerwacji. Zalecane: 120.
-     */
     arrivalWindowBeforeMinutes?: number | null;
     arrivalWindowAfterMinutes?: number | null;
     depositAmount?: number | null;
-    depositFromTablesCount?: number | null;
     reservationStartAfterOpeningMinutes?: number | null;
     latestReservationStartBeforeClosingMinutes?: number | null;
   };
   billiard: {
     enabled?: boolean | null;
-    /**
-     * Np. "Rezerwacje bilarda są chwilowo wyłączone. Zadzwoń do nas."
-     */
     disabledMessage?: string | null;
     pricePerHour: number;
     reservationStartAfterOpeningMinutes?: number | null;
@@ -1068,21 +1040,12 @@ export interface ReservationSetting {
   };
   bowling: {
     enabled?: boolean | null;
-    /**
-     * Np. "Rezerwacje kręgli są chwilowo wyłączone. Zadzwoń do nas."
-     */
     disabledMessage?: string | null;
     pricePerHour: number;
     reservationStartAfterOpeningMinutes?: number | null;
     latestReservationStartBeforeClosingMinutes?: number | null;
   };
-  /**
-   * Plik PDF z regulaminem. Będzie dostępny do pobrania przy rezerwacji.
-   */
   regulationsPdf?: (number | null) | Media;
-  /**
-   * Plik PDF z polityką prywatności. Będzie dostępny do pobrania przy rezerwacji.
-   */
   privacyPolicyPdf?: (number | null) | Media;
   updatedAt?: string | null;
   createdAt?: string | null;
@@ -1133,7 +1096,6 @@ export interface ReservationSettingsSelect<T extends boolean = true> {
         arrivalWindowBeforeMinutes?: T;
         arrivalWindowAfterMinutes?: T;
         depositAmount?: T;
-        depositFromTablesCount?: T;
         reservationStartAfterOpeningMinutes?: T;
         latestReservationStartBeforeClosingMinutes?: T;
       };

@@ -2,6 +2,7 @@
 
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,13 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { WeekDateCards } from "@/components/reservations/WeekDateCards";
-import { InvoiceFields } from "@/components/reservations/InvoiceFields";
 import { ReservationStepper } from "@/components/reservations/ReservationStepper";
 import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Info } from "lucide-react";
 
 import { tablesRequestSchema, type TablesRequest } from "@/lib/validation/reservations";
+import { ServerErrorMessage } from "@/components/reservations/ServerErrorMessage";
 
 type AvailabilitySlot = { time: string; remaining: number; canBook: boolean };
 type AvailabilityResponse = {
@@ -89,6 +90,7 @@ function clampPartySizeUI(raw: string) {
 }
 
 export default function RezerwacjeStolikiPage() {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [day, setDay] = useState<string>(() => {
@@ -105,6 +107,7 @@ export default function RezerwacjeStolikiPage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [fetchedOnce, setFetchedOnce] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const partySizeNumber = useMemo(() => {
     if (partySizeRaw.trim() === "") return 0;
@@ -217,20 +220,33 @@ export default function RezerwacjeStolikiPage() {
   }, [day, partySizeForApi]);
 
   async function onSubmit(values: TablesRequest) {
-    const res = await fetch("/api/reservations/stoliki", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
+    setServerError(null);
+    try {
+      const res = await fetch("/api/reservations/stoliki", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => null);
-      alert(`Błąd:\n${JSON.stringify(err, null, 2)}`);
-      console.log("API error:", err);
-      return;
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (json?.error === "VALIDATION_ERROR" && Array.isArray(json.issues)) {
+          for (const issue of json.issues) {
+            const path = issue.path?.[0];
+            if (path) form.setError(path as any, { type: "server", message: issue.message });
+          }
+          return;
+        }
+        setServerError(json?.message ?? "Wystąpił błąd. Spróbuj ponownie.");
+        return;
+      }
+
+      const groupId = json?.groupId ?? "";
+      router.push(`/rezerwacje/podziekowanie?sessionId=${encodeURIComponent(groupId)}`);
+    } catch {
+      setServerError("Błąd połączenia. Sprawdź internet i spróbuj ponownie.");
     }
-
-    setStep(3);
   }
 
   // gating: ukrywamy tylko “resztę” (godzina+osoby+podsumowanie+przycisk)
@@ -269,7 +285,7 @@ export default function RezerwacjeStolikiPage() {
             </div>
 
             {/* ✅ tutaj dopiero gating + overlay, bez layout shiftu */}
-            <div className="relative min-h-[420px]">
+            <div className="relative min-h-[200px]">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: isGatedLoading ? 0 : 1 }}
@@ -298,14 +314,12 @@ export default function RezerwacjeStolikiPage() {
                     </SelectContent>
                   </Select>
 
-                  {selectedSlot ? (
-                    <div className="text-sm text-muted-foreground">
-                      Dostępne miejsca: <span className="font-medium">{remainingNow}</span>
-                    </div>
-                  ) : null}
+                  <div className="text-sm text-muted-foreground min-h-[1.25rem]">
+                    {selectedSlot ? <>Dostępne miejsca: <span className="font-medium">{remainingNow}</span></> : null}
+                  </div>
                 </div>
 
-                <div className="grid gap-2 max-w-[240px]">
+                <div className="grid gap-2 max-w-[360px]">
                   <div className="flex items-center gap-1.5">
                     <Label htmlFor="partySize">Liczba osób (max 16)</Label>
                     <InfoPopover message="Rezerwacja stolika online możliwa jest dla maksymalnie 16 osób. W przypadku większych grup prosimy o kontakt z obsługą." />
@@ -324,7 +338,7 @@ export default function RezerwacjeStolikiPage() {
                   />
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <Button
                     type="button"
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
@@ -333,6 +347,9 @@ export default function RezerwacjeStolikiPage() {
                   >
                     Podaj dane
                   </Button>
+                  {fetchedOnce && !isReservationsEnabled ? (
+                    <span className="text-sm text-muted-foreground">{disabledMessage}</span>
+                  ) : null}
                 </div>
               </motion.div>
 
@@ -422,14 +439,21 @@ export default function RezerwacjeStolikiPage() {
                   Wróć
                 </Button>
 
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled>
-                  Zarezerwuj stolik
+                <Button
+                  type="submit"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={form.formState.isSubmitting}
+                  onClick={() => form.trigger()}
+                >
+                  {form.formState.isSubmitting ? "Przetwarzam..." : "Zarezerwuj stolik"}
                 </Button>
               </div>
 
-              <p className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                Rezerwacje stolików uruchomimy wkrótce.
-              </p>
+              {serverError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <ServerErrorMessage message={serverError} />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </form>

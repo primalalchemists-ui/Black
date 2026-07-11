@@ -16,6 +16,7 @@ import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
 import { formatPLN } from "@/components/reservations/money";
 
 import { billiardsRequestSchema, type BilliardsRequest } from "@/lib/validation/reservations";
+import { ServerErrorMessage } from "@/components/reservations/ServerErrorMessage";
 
 function formatHHMMFromFloat(h: number) {
   const hh = Math.floor(h);
@@ -46,6 +47,8 @@ type AvailabilityResponse =
 export default function RezerwacjeBilardPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [gridReady, setGridReady] = useState(false);
+  const [gridEnabled, setGridEnabled] = useState(true);
+  const [gridDisabledMsg, setGridDisabledMsg] = useState<string | null>(null);
 
 
   const [day, setDay] = useState<string>(() => {
@@ -249,6 +252,10 @@ export default function RezerwacjeBilardPage() {
               endHour={cfg?.endHour ?? 22}
               onChange={(v) => setGrid(v as any)}
               onLoadingChange={({ ready }) => setGridReady(ready)}
+              onEnabledChange={({ enabled, disabledMessage }) => {
+                setGridEnabled(enabled);
+                setGridDisabledMsg(disabledMessage);
+              }}
             />
 
             {gridReady ? (
@@ -262,8 +269,8 @@ export default function RezerwacjeBilardPage() {
                   Podaj dane
                 </Button>
 
-                {!canGoStep2 ? (
-                  <div className="text-sm text-muted-foreground self-center">Wybierz przynajmniej jeden stół.</div>
+                {!gridEnabled ? (
+                  <span className="text-sm text-muted-foreground">{gridDisabledMsg || "Usługa jest chwilowo wyłączona."}</span>
                 ) : null}
               </div>
             ) : null}
@@ -315,12 +322,6 @@ export default function RezerwacjeBilardPage() {
                 )}
               </div>
 
-              {form.formState.errors?.root?.server?.message ? (
-                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-                  {String(form.formState.errors.root.server.message)}
-                </div>
-              ) : null}
-
               <CustomerFields register={form.register} errors={form.formState.errors} />
 
               <Card>
@@ -343,19 +344,27 @@ export default function RezerwacjeBilardPage() {
                 href="/polityka-prywatnosci"
               />
 
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={() => setStep(1)}>
-                  Wróć
-                </Button>
+              <div className="grid gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                    Wróć
+                  </Button>
 
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled>
-                  Rezerwuję i płacę {formatPLN(payAmount)}
-                </Button>
+                  <Button
+                    type="submit"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={form.formState.isSubmitting}
+                  >
+                    {form.formState.isSubmitting ? "Przetwarzam..." : `Rezerwuję i płacę ${formatPLN(payAmount)}`}
+                  </Button>
+                </div>
+
+                {form.formState.errors?.root?.server?.message ? (
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                    <ServerErrorMessage message={String(form.formState.errors.root.server.message)} />
+                  </div>
+                ) : null}
               </div>
-
-              <p className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                Płatności online zostaną uruchomione wkrótce. W celu potwierdzenia rezerwacji prosimy o kontakt z obsługą.
-              </p>
             </CardContent>
           </Card>
         </form>
