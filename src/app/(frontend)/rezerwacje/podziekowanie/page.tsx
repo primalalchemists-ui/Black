@@ -93,21 +93,28 @@ export default async function PodziekowaniePageWrapper({
   }
 
   const segments = isEvent ? [] : docs.flatMap((doc) => {
-    const resourceList = (doc.resources as any[]) ?? []
     const type = doc.type as string
     const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
     const endHH = `${fmt2(Number(doc.endHour ?? 0))}:${fmt2(Number(doc.endMinute ?? 0))}`
     const reservationNumber = String(doc.reservationNumber ?? doc.id)
+
+    if (type === "stolik") {
+      const n = Number(doc.partySize) || 1
+      const personLabel = n === 1 ? "1 osoby" : `${n} osób`
+      return [{ resourceLabel: `Dla ${personLabel}`, startHH, endHH: null as string | null, reservationNumber }]
+    }
+
+    const resourceList = (doc.resources as any[]) ?? []
     const nums = resourceList
       .map((r: any) => (r && typeof r === "object" ? r.number : null))
       .filter((n: any) => n != null)
     if (!nums.length) {
       const resourceLabel = type === "kregle" ? "Tor ?" : "Stół ?"
-      return [{ resourceLabel, startHH, endHH, reservationNumber }]
+      return [{ resourceLabel, startHH, endHH: endHH as string | null, reservationNumber }]
     }
     return nums.map((num: any) => {
       const resourceLabel = type === "kregle" ? `Tor ${num}` : `Stół ${num}`
-      return { resourceLabel, startHH, endHH, reservationNumber }
+      return { resourceLabel, startHH, endHH: endHH as string | null, reservationNumber }
     })
   })
 
@@ -191,7 +198,7 @@ export default async function PodziekowaniePageWrapper({
                           <li key={i} className="flex items-center justify-between text-sm">
                             <span className="font-medium">{s.resourceLabel}</span>
                             <span className="text-muted-foreground">
-                              {s.startHH}–{s.endHH}
+                              {s.endHH ? `${s.startHH}–${s.endHH}` : s.startHH}
                             </span>
                           </li>
                         ))}
