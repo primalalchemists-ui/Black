@@ -345,7 +345,7 @@ export function ResourceGrid({
                       // const color = st === "free" ? "bg-green-600/80 hover:bg-green-600" : st === "busy" ? "bg-red-600/80" : "bg-black/80";
                       // const ring = sel ? "ring-2 ring-black" : "";
 
-                      const base = "relative h-10 w-full rounded-md border transition-colors flex items-center justify-center";
+                      const base = "relative h-10 w-full rounded-md border transition-colors";
                       const color =
                         st === "free"
                           ? "bg-green-600/80 hover:bg-green-600"
@@ -353,18 +353,7 @@ export function ResourceGrid({
                             ? "bg-red-600/80"
                             : "bg-black/80";
 
-                      // const ring = sel ? "outline outline-2 outline-black outline-offset-2" : "";
-
                       return (
-                        // <button
-                        //   key={`${rNum}-${t}`}
-                        //   type="button"
-                        //   onClick={() => onCellClick(rNum, idx)}
-                        //   disabled={st !== "free"}
-                        //   className={[base, color, ring].join(" ")}
-                        //   aria-label={`${resourceLabel} ${rNum}, ${t}, status ${st}`}
-                        //   title={st === "free" ? "Wolne" : st === "busy" ? "Zajęte" : "Niedostępne"}
-                        // />
                         <button
                           key={`${rNum}-${t}`}
                           type="button"
@@ -374,12 +363,6 @@ export function ResourceGrid({
                           aria-label={`${resourceLabel} ${rNum}, ${t}, status ${st}`}
                           title={st === "free" ? "Wolne" : st === "busy" ? "Zajęte" : "Niedostępne"}
                         >
-                          <span
-                            aria-hidden="true"
-                            className="pointer-events-none text-xs font-medium text-white/80 select-none"
-                          >
-                            {st === "free" ? "Wolne" : st === "busy" ? "Zajęte" : ""}
-                          </span>
                           {sel ? (
                             <span
                               aria-hidden="true"

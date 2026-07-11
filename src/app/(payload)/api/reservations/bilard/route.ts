@@ -513,46 +513,46 @@ export async function POST(req: Request) {
 
     console.log(`[bilard] P24 payUrl=${p24PayUrl} groupId=${groupId}`)
 
-    // Zapis do bazy — JEDEN rekord dla wszystkich stołów
-    const allResourceIds = [...new Set(toCreate.map(x => x.resourceId))]
-    const minStartsAt = toCreate.reduce((min, x) => x.startsAt < min ? x.startsAt : min, toCreate[0].startsAt)
-    const maxEndsAt = toCreate.reduce((max, x) => x.endsAt > max ? x.endsAt : max, toCreate[0].endsAt)
-    const dayISO2 = startOfLocalDayISO(minStartsAt)
+    // Zapis do bazy — jeden rekord per stół (własny czas każdego)
+    const dayISO2 = startOfLocalDayISO(toCreate[0].startsAt)
+    const createdDocs: any[] = []
+    for (const seg of toCreate) {
+      const segDoc = await payload.create({
+        collection: "reservations",
+        data: {
+          type: "bilard",
+          day: dayISO2,
+          groupId,
+          reservationNumber: groupReservationNumber,
 
-    const doc = await payload.create({
-      collection: "reservations",
-      data: {
-        type: "bilard",
-        day: dayISO2,
-        groupId,
-        reservationNumber: groupReservationNumber,
+          customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+          notes: data.notes || "",
 
-        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-        notes: data.notes || "",
+          startsAt: seg.startsAt.toISOString(),
+          endsAt: seg.endsAt.toISOString(),
 
-        startsAt: minStartsAt.toISOString(),
-        endsAt: maxEndsAt.toISOString(),
+          startHour: seg.startsAt.getHours(),
+          startMinute: seg.startsAt.getMinutes(),
+          endHour: seg.endsAt.getHours(),
+          endMinute: seg.endsAt.getMinutes(),
 
-        startHour: minStartsAt.getHours(),
-        startMinute: minStartsAt.getMinutes(),
-        endHour: maxEndsAt.getHours(),
-        endMinute: maxEndsAt.getMinutes(),
+          resources: [seg.resourceId],
+          invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
+          acceptRules: data.acceptRules,
 
-        resources: allResourceIds,
-        invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
-        acceptRules: data.acceptRules,
+          source: "online",
+          status: "new",
 
-        source: "online",
-        status: "new",
+          depositRequired: amountToPay > 0,
+          depositAmount: amountToPay > 0 ? seg.segmentPrice : 0,
+          paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
+          paymentProvider: amountGrosze > 0 ? "p24" : undefined,
+        } as any,
+      })
+      createdDocs.push(segDoc)
+    }
 
-        depositRequired: amountToPay > 0,
-        depositAmount: amountToPay > 0 ? amountToPay : 0,
-        paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
-        paymentProvider: amountGrosze > 0 ? "p24" : undefined,
-      } as any,
-    })
-
-    const createdIds = [doc.id]
+    const createdIds = createdDocs.map(d => d.id)
 
     if (p24PayUrl) {
       return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });
