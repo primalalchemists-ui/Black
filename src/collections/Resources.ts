@@ -5,7 +5,7 @@ const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.r
 export const Resources: CollectionConfig = {
   slug: 'resources',
   labels: { singular: 'Zasób', plural: 'Zasoby' },
-  admin: { group: 'Rezerwacje', useAsTitle: 'label' },
+  admin: { group: 'Ustawienia', useAsTitle: 'label' },
   access: {
     read: isStaffOrAdmin,
     create: isStaffOrAdmin,

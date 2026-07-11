@@ -221,6 +221,17 @@ export async function GET(req: Request) {
       const rr = relIds(r.resources);
       if (!rr.includes(args.resourceId)) return false;
 
+      const rSegs = Array.isArray(r.segments) ? r.segments as any[] : [];
+      if (rSegs.length > 0) {
+        return rSegs.some((seg: any) => {
+          const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""))
+          if (segResId !== args.resourceId) return false
+          const segStart = toDateAtHourMinute(date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0))
+          const segEnd = toDateAtHourMinute(date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0))
+          return overlaps(segStart, segEnd, args.slotStart, args.slotEnd)
+        })
+      }
+
       const rStart = new Date(r.startsAt);
       const rEnd = r.endsAt ? new Date(r.endsAt) : endOfDay(date); // ✅ FIX
       return overlaps(rStart, rEnd, args.slotStart, args.slotEnd);
@@ -466,6 +477,17 @@ export async function POST(req: Request) {
         const rr = relIds(r.resources);
         if (!rr.includes(resourceId)) return false;
 
+        const rSegs = Array.isArray(r.segments) ? r.segments as any[] : [];
+        if (rSegs.length > 0) {
+          return rSegs.some((seg: any) => {
+            const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""))
+            if (segResId !== resourceId) return false
+            const segStart = toDateAtHourMinute(data.date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0))
+            const segEnd = toDateAtHourMinute(data.date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0))
+            return overlaps(segStart, segEnd, startsAt, endsAt)
+          })
+        }
+
         const rStart = new Date(r.startsAt);
         const rEnd = r.endsAt ? new Date(r.endsAt) : endOfDay(data.date); // ✅ FIX
         return overlaps(rStart, rEnd, startsAt, endsAt);
@@ -513,62 +535,60 @@ export async function POST(req: Request) {
 
     console.log(`[kregle] P24 payUrl=${p24PayUrl} groupId=${groupId}`)
 
-    // Zapis do bazy — jeden rekord per tor (własny czas każdego)
-    // reservationNumber tylko na pierwszym rekordzie — DB ma UNIQUE INDEX na tym polu
+    // Jeden rekord dla całej rezerwacji, segmenty per tor wewnątrz
     const dayISO2 = startOfLocalDayISO(toCreate[0].startsAt)
-    const createdDocs: any[] = []
-    try {
-      for (let i = 0; i < toCreate.length; i++) {
-        const seg = toCreate[i]
-        const segDoc = await payload.create({
-          collection: "reservations",
-          data: {
-            type: "kregle",
-            day: dayISO2,
-            groupId,
-            reservationNumber: i === 0 ? groupReservationNumber : undefined,
+    const allResourceIds = toCreate.map(s => s.resourceId)
+    const minStartsAt = toCreate.reduce((min, s) => s.startsAt < min ? s.startsAt : min, toCreate[0].startsAt)
+    const maxEndsAt = toCreate.reduce((max, s) => s.endsAt > max ? s.endsAt : max, toCreate[0].endsAt)
 
-            customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-            notes: data.notes || "",
+    const segmentsData = toCreate.map(seg => ({
+      resource: seg.resourceId,
+      startHour: seg.startsAt.getHours(),
+      startMinute: seg.startsAt.getMinutes(),
+      endHour: seg.endsAt.getHours(),
+      endMinute: seg.endsAt.getMinutes(),
+      price: seg.segmentPrice,
+    }))
 
-            startsAt: seg.startsAt.toISOString(),
-            endsAt: seg.endsAt.toISOString(),
+    const createdDoc = await payload.create({
+      collection: "reservations",
+      data: {
+        type: "kregle",
+        day: dayISO2,
+        groupId,
+        reservationNumber: groupReservationNumber,
 
-            startHour: seg.startsAt.getHours(),
-            startMinute: seg.startsAt.getMinutes(),
-            endHour: seg.endsAt.getHours(),
-            endMinute: seg.endsAt.getMinutes(),
+        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+        notes: data.notes || "",
 
-            resources: [seg.resourceId],
-            invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
-            acceptRules: data.acceptRules,
+        startsAt: minStartsAt.toISOString(),
+        endsAt: maxEndsAt.toISOString(),
 
-            source: "online",
-            status: "new",
+        startHour: minStartsAt.getHours(),
+        startMinute: minStartsAt.getMinutes(),
+        endHour: maxEndsAt.getHours(),
+        endMinute: maxEndsAt.getMinutes(),
 
-            depositRequired: amountToPay > 0,
-            depositAmount: amountToPay > 0 ? seg.segmentPrice : 0,
-            paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
-            paymentProvider: amountGrosze > 0 ? "p24" : undefined,
-          } as any,
-        })
-        createdDocs.push(segDoc)
-      }
-    } catch (createErr) {
-      // usuń już zapisane rekordy żeby nie blokować slotów
-      for (const d of createdDocs) {
-        await payload.delete({ collection: "reservations", id: d.id, overrideAccess: true }).catch(() => {})
-      }
-      throw createErr
-    }
+        resources: allResourceIds,
+        segments: segmentsData,
+        invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
+        acceptRules: data.acceptRules,
 
-    const createdIds = createdDocs.map(d => d.id)
+        source: "online",
+        status: "new",
+
+        depositRequired: amountToPay > 0,
+        depositAmount: amountToPay,
+        paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
+        paymentProvider: amountGrosze > 0 ? "p24" : undefined,
+      } as any,
+    })
 
     if (p24PayUrl) {
       return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });
     }
 
-    return NextResponse.json({ ok: true, groupId, reservationIds: createdIds, amountToPay });
+    return NextResponse.json({ ok: true, groupId, reservationIds: [createdDoc.id], amountToPay });
   }
 
   // stare flow

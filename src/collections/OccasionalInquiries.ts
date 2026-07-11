@@ -27,7 +27,7 @@ export const OccasionalInquiries: CollectionConfig = {
     plural: "Zapytania okolicznościowe",
   },
   admin: {
-    group: "Imprezy okolicznościowe",
+    group: "Obsługa",
     useAsTitle: "name",
     defaultColumns: ["type", "date", "startsAt", "status"],
     components: {

@@ -1,3 +1,4 @@
+import { AdminDashboard as AdminDashboard_c9e8c9f1a2b3d4e5f6a7b8c9d0e1f2a3 } from '@/components/admin/AdminDashboard'
 import { EventsListView as EventsListView_845a064fa3c7669555a9a9aff884f425 } from '@/components/admin/EventsListView'
 import { ReservationsListView as ReservationsListView_a0abc4c5ae961a9e7078b7b1a9b3bed1 } from '@/components/admin/ReservationsListView'
 import { OccasionalInquiriesListView as OccasionalInquiriesListView_25736016e4423b1b6172f001213735e6 } from '@/components/admin/OccasionalInquiriesListView'
@@ -9,6 +10,7 @@ import { S3ClientUploadHandler as S3ClientUploadHandler_f97aa6c64367fa259c5bc056
 import { CollectionCards as CollectionCards_ab83ff7e88da8d3530831f296ec4756a } from '@payloadcms/ui/rsc'
 
 export const importMap = {
+  "@/components/admin/AdminDashboard#AdminDashboard": AdminDashboard_c9e8c9f1a2b3d4e5f6a7b8c9d0e1f2a3,
   "@/components/admin/EventsListView#EventsListView": EventsListView_845a064fa3c7669555a9a9aff884f425,
   "@/components/admin/ReservationsListView#ReservationsListView": ReservationsListView_a0abc4c5ae961a9e7078b7b1a9b3bed1,
   "@/components/admin/OccasionalInquiriesListView#OccasionalInquiriesListView": OccasionalInquiriesListView_25736016e4423b1b6172f001213735e6,

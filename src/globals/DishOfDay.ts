@@ -4,6 +4,7 @@ const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.r
 export const DishOfDay: GlobalConfig = {
   slug: 'dish-of-day',
   label: 'Danie dnia',
+  admin: { group: 'Restauracja' },
   access: { read: () => true, update: isStaffOrAdmin },
   fields: [
     { name: 'item', label: 'Pozycja z menu', type: 'relationship', relationTo: 'menu-items' },

@@ -94,16 +94,31 @@ export default async function PodziekowaniePageWrapper({
 
   const segments = isEvent ? [] : docs.flatMap((doc) => {
     const type = doc.type as string
-    const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
-    const endHH = `${fmt2(Number(doc.endHour ?? 0))}:${fmt2(Number(doc.endMinute ?? 0))}`
     const reservationNumber = String(doc.reservationNumber ?? doc.id)
 
     if (type === "stolik") {
+      const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
       const n = Number(doc.partySize) || 1
       const personLabel = n === 1 ? "1 osoby" : `${n} osób`
       return [{ resourceLabel: `Dla ${personLabel}`, startHH, endHH: null as string | null, reservationNumber }]
     }
 
+    // Nowy format: segmenty per zasób (depth:1 populuje obiekt resource)
+    const segs = Array.isArray(doc.segments) ? doc.segments as any[] : []
+    if (segs.length > 0) {
+      return segs.map((seg: any) => {
+        const resObj = seg.resource && typeof seg.resource === "object" ? seg.resource : null
+        const num = resObj?.number ?? "?"
+        const resourceLabel = type === "kregle" ? `Tor ${num}` : `Stół ${num}`
+        const startHH = `${fmt2(Number(seg.startHour ?? 0))}:${fmt2(Number(seg.startMinute ?? 0))}`
+        const endHH = `${fmt2(Number(seg.endHour ?? 0))}:${fmt2(Number(seg.endMinute ?? 0))}`
+        return { resourceLabel, startHH, endHH: endHH as string | null, reservationNumber }
+      })
+    }
+
+    // Fallback: stary format (wiele rekordów per zasób)
+    const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
+    const endHH = `${fmt2(Number(doc.endHour ?? 0))}:${fmt2(Number(doc.endMinute ?? 0))}`
     const resourceList = (doc.resources as any[]) ?? []
     const nums = resourceList
       .map((r: any) => (r && typeof r === "object" ? r.number : null))

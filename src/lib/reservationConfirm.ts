@@ -164,6 +164,20 @@ export async function confirmGroupPayment(
       const dateDisplay = `${d}.${m}.${y}`
 
       const segments = docs.flatMap((doc) => {
+        // Nowy format: segmenty per zasób (depth:1 populuje obiekt resource)
+        const segs = Array.isArray(doc.segments) ? doc.segments as any[] : []
+        if (segs.length > 0) {
+          return segs.map((seg: any) => {
+            const resObj = seg.resource && typeof seg.resource === "object" ? seg.resource : null
+            const num = resObj?.number ?? "?"
+            const resourceLabel = laneType === "kregle" ? `Tor ${num}` : `Stół ${num}`
+            const startHH = `${String(seg.startHour ?? 0).padStart(2, "0")}:${String(seg.startMinute ?? 0).padStart(2, "0")}`
+            const endHH = `${String(seg.endHour ?? 0).padStart(2, "0")}:${String(seg.endMinute ?? 0).padStart(2, "0")}`
+            return { resourceLabel, startHH, endHH }
+          })
+        }
+
+        // Fallback: stary format
         const resourceList = (doc.resources as any[]) ?? []
         const startHH = `${String(doc.startHour ?? 0).padStart(2, "0")}:${String(doc.startMinute ?? 0).padStart(2, "0")}`
         const endHH = `${String(doc.endHour ?? 0).padStart(2, "0")}:${String(doc.endMinute ?? 0).padStart(2, "0")}`

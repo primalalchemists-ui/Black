@@ -5,6 +5,7 @@ const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.r
 export const ReservationSettings: GlobalConfig = {
   slug: 'reservation-settings',
   label: 'Ustawienia rezerwacji',
+  admin: { group: 'Ustawienia' },
   access: {
     read: isStaffOrAdmin,
     update: isStaffOrAdmin,

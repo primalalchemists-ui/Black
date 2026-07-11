@@ -57,6 +57,11 @@ export default buildConfig({
         Logo: '@/components/admin/AdminLogo#AdminLogo',
         Icon: '@/components/admin/AdminIcon#AdminIcon',
       },
+      views: {
+        dashboard: {
+          Component: '@/components/admin/AdminDashboard#AdminDashboard',
+        },
+      },
     },
     meta: {
       titleSuffix: ' — BLACK',
@@ -89,19 +94,30 @@ export default buildConfig({
   },
 
   collections: [
-    Users,
-    Media,
-    Events,
-    MenuCategories,
-    MenuItems,
-    Resources,
+    // Obsługa
     Reservations,
-    OccasionalInquiries,
     Payments,
     Blackouts,
+    OccasionalInquiries,
+    // Restauracja
+    MenuCategories,
+    MenuItems,
+    // Wydarzenia
+    Events,
+    Media,
+    // Ustawienia
+    Resources,
+    // Administracja
+    Users,
   ],
 
-  globals: [SiteSettings, DishOfDay, ReservationSettings],
+  globals: [
+    // Restauracja
+    DishOfDay,
+    // Ustawienia
+    ReservationSettings,
+    SiteSettings,
+  ],
 
   editor: lexicalEditor(),
 

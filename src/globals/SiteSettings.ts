@@ -5,6 +5,7 @@ const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.r
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
   label: 'Ustawienia strony',
+  admin: { group: 'Ustawienia' },
   access: { read: () => true, update: isStaffOrAdmin },
   fields: [
     { name: 'name', label: 'Nazwa obiektu', type: 'text', required: true },

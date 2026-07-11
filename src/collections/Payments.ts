@@ -23,7 +23,7 @@ export const Payments: CollectionConfig = {
   slug: 'payments',
   labels: { singular: 'Płatność', plural: 'Płatności' },
   admin: {
-    group: 'Rezerwacje',
+    group: 'Obsługa',
     defaultColumns: ['provider', 'status', 'amount', 'createdAt'],
   },
   access: {

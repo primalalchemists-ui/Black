@@ -28,7 +28,7 @@ export const Events: CollectionConfig = {
   slug: 'events',
   labels: { singular: 'Wydarzenie', plural: 'Wydarzenia' },
   admin: {
-    group: 'Treści strony',
+    group: 'Wydarzenia',
     useAsTitle: 'title',
     defaultColumns: ['title', 'startsAt', 'kind', 'status'],
     components: {

@@ -6,6 +6,7 @@ import * as migration_20260621_add_nip_to_site_settings from './20260621_add_nip
 import * as migration_20260705_add_reservation_number from './20260705_add_reservation_number';
 import * as migration_20260708_add_event_type_fields from './20260708_add_event_type_fields';
 import * as migration_20260708_fix_events_kind from './20260708_fix_events_kind';
+import * as migration_20260712_add_reservation_segments from './20260712_add_reservation_segments';
 
 export const migrations = [
   {
@@ -47,5 +48,10 @@ export const migrations = [
     up: migration_20260708_fix_events_kind.up,
     down: migration_20260708_fix_events_kind.down,
     name: '20260708_fix_events_kind',
+  },
+  {
+    up: migration_20260712_add_reservation_segments.up,
+    down: migration_20260712_add_reservation_segments.down,
+    name: '20260712_add_reservation_segments',
   },
 ];

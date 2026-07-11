@@ -22,6 +22,7 @@ export const Blackouts: CollectionConfig = {
   labels: { singular: "Blokada dostępności", plural: "Blokady dostępności" },
 
   admin: {
+    group: "Obsługa",
     useAsTitle: "title",
     defaultColumns: ["service", "day", "allDay", "startHour", "startMinute", "endHour", "endMinute", "active"],
     components: {

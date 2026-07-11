@@ -67,16 +67,16 @@ export interface Config {
   };
   blocks: {};
   collections: {
-    users: User;
-    media: Media;
-    events: Event;
-    'menu-categories': MenuCategory;
-    'menu-items': MenuItem;
-    resources: Resource;
     reservations: Reservation;
-    'occasional-inquiries': OccasionalInquiry;
     payments: Payment;
     blackouts: Blackout;
+    'occasional-inquiries': OccasionalInquiry;
+    'menu-categories': MenuCategory;
+    'menu-items': MenuItem;
+    events: Event;
+    media: Media;
+    resources: Resource;
+    users: User;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,16 +84,16 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
-    users: UsersSelect<false> | UsersSelect<true>;
-    media: MediaSelect<false> | MediaSelect<true>;
-    events: EventsSelect<false> | EventsSelect<true>;
-    'menu-categories': MenuCategoriesSelect<false> | MenuCategoriesSelect<true>;
-    'menu-items': MenuItemsSelect<false> | MenuItemsSelect<true>;
-    resources: ResourcesSelect<false> | ResourcesSelect<true>;
     reservations: ReservationsSelect<false> | ReservationsSelect<true>;
-    'occasional-inquiries': OccasionalInquiriesSelect<false> | OccasionalInquiriesSelect<true>;
     payments: PaymentsSelect<false> | PaymentsSelect<true>;
     blackouts: BlackoutsSelect<false> | BlackoutsSelect<true>;
+    'occasional-inquiries': OccasionalInquiriesSelect<false> | OccasionalInquiriesSelect<true>;
+    'menu-categories': MenuCategoriesSelect<false> | MenuCategoriesSelect<true>;
+    'menu-items': MenuItemsSelect<false> | MenuItemsSelect<true>;
+    events: EventsSelect<false> | EventsSelect<true>;
+    media: MediaSelect<false> | MediaSelect<true>;
+    resources: ResourcesSelect<false> | ResourcesSelect<true>;
+    users: UsersSelect<false> | UsersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -104,14 +104,14 @@ export interface Config {
   };
   fallbackLocale: null;
   globals: {
-    'site-settings': SiteSetting;
     'dish-of-day': DishOfDay;
     'reservation-settings': ReservationSetting;
+    'site-settings': SiteSetting;
   };
   globalsSelect: {
-    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
     'dish-of-day': DishOfDaySelect<false> | DishOfDaySelect<true>;
     'reservation-settings': ReservationSettingsSelect<false> | ReservationSettingsSelect<true>;
+    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
   };
   locale: null;
   user: User & {
@@ -142,47 +142,131 @@ export interface UserAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
+ * via the `definition` "reservations".
  */
-export interface User {
+export interface Reservation {
   id: number;
-  role: 'admin' | 'staff';
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
+  type: 'stolik' | 'kregle' | 'bilard' | 'impreza' | 'biznes';
+  customer: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email?: string | null;
+  };
+  notes?: string | null;
+  day: string;
+  allDay?: boolean | null;
+  startHour?:
+    | (
+        | '0'
+        | '1'
+        | '2'
+        | '3'
+        | '4'
+        | '5'
+        | '6'
+        | '7'
+        | '8'
+        | '9'
+        | '10'
+        | '11'
+        | '12'
+        | '13'
+        | '14'
+        | '15'
+        | '16'
+        | '17'
+        | '18'
+        | '19'
+        | '20'
+        | '21'
+        | '22'
+        | '23'
+      )
+    | null;
+  startMinute?: ('0' | '15' | '30' | '45') | null;
+  endHour?:
+    | (
+        | '0'
+        | '1'
+        | '2'
+        | '3'
+        | '4'
+        | '5'
+        | '6'
+        | '7'
+        | '8'
+        | '9'
+        | '10'
+        | '11'
+        | '12'
+        | '13'
+        | '14'
+        | '15'
+        | '16'
+        | '17'
+        | '18'
+        | '19'
+        | '20'
+        | '21'
+        | '22'
+        | '23'
+      )
+    | null;
+  endMinute?: ('0' | '15' | '30' | '45') | null;
+  startsAt: string;
+  endsAt?: string | null;
+  partySize?: number | null;
+  tablesCount?: number | null;
+  resources?: (number | Resource)[] | null;
+  /**
+   * Szczegóły czasowe per zasób — generowane automatycznie przy rezerwacji online
+   */
+  segments?:
     | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
+        resource?: (number | null) | Resource;
+        startHour?: number | null;
+        startMinute?: number | null;
+        endHour?: number | null;
+        endMinute?: number | null;
+        price?: number | null;
+        id?: string | null;
       }[]
     | null;
-  password?: string | null;
+  event?: (number | null) | Event;
+  disabledPerson?: boolean | null;
+  disabilityDetails?: string | null;
+  invoice?: {
+    wantInvoice?: boolean | null;
+    invoiceType?: ('personal' | 'company') | null;
+    nip?: string | null;
+  };
+  acceptRules: boolean;
+  source: 'online' | 'phone' | 'staff';
+  status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'completed';
+  depositRequired?: boolean | null;
+  depositAmount?: number | null;
+  paymentStatus?: ('not_required' | 'pending' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
+  paymentProvider?: 'p24' | null;
+  payment?: (number | null) | Payment;
+  groupId?: string | null;
+  reservationNumber?: string | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
+ * via the `definition` "resources".
  */
-export interface Media {
+export interface Resource {
   id: number;
-  alt: string;
+  type: 'lane' | 'billiard';
+  number: number;
+  label: string;
+  active?: boolean | null;
+  notes?: string | null;
   updatedAt: string;
   createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -269,66 +353,57 @@ export interface Event {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "menu-categories".
+ * via the `definition` "media".
  */
-export interface MenuCategory {
+export interface Media {
   id: number;
-  name: string;
-  order?: number | null;
-  active?: boolean | null;
+  alt: string;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payments".
+ */
+export interface Payment {
+  id: number;
+  provider: 'p24';
+  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  amount: number;
+  currency?: string | null;
+  p24SessionId?: string | null;
+  p24OrderId?: string | null;
+  p24Sign?: string | null;
+  reservation?: (number | null) | Reservation;
+  raw?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "menu-items".
+ * via the `definition` "blackouts".
  */
-export interface MenuItem {
+export interface Blackout {
   id: number;
-  name: string;
-  description?: string | null;
-  image?: (number | null) | Media;
-  category: number | MenuCategory;
-  price: number;
-  promo?: {
-    enabled?: boolean | null;
-    promoPrice?: number | null;
-    startsAt?: string | null;
-    endsAt?: string | null;
-  };
-  order?: number | null;
-  active?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "resources".
- */
-export interface Resource {
-  id: number;
-  type: 'lane' | 'billiard';
-  number: number;
-  label: string;
-  active?: boolean | null;
-  notes?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "reservations".
- */
-export interface Reservation {
-  id: number;
-  type: 'stolik' | 'kregle' | 'bilard' | 'impreza' | 'biznes';
-  customer: {
-    firstName: string;
-    lastName: string;
-    phone: string;
-    email?: string | null;
-  };
-  notes?: string | null;
+  title: string;
+  service: 'bowling' | 'billiard';
   day: string;
   allDay?: boolean | null;
   startHour?:
@@ -389,55 +464,9 @@ export interface Reservation {
       )
     | null;
   endMinute?: ('0' | '15' | '30' | '45') | null;
-  startsAt: string;
-  endsAt?: string | null;
-  partySize?: number | null;
-  tablesCount?: number | null;
   resources?: (number | Resource)[] | null;
-  event?: (number | null) | Event;
-  disabledPerson?: boolean | null;
-  disabilityDetails?: string | null;
-  invoice?: {
-    wantInvoice?: boolean | null;
-    invoiceType?: ('personal' | 'company') | null;
-    nip?: string | null;
-  };
-  acceptRules: boolean;
-  source: 'online' | 'phone' | 'staff';
-  status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'completed';
-  depositRequired?: boolean | null;
-  depositAmount?: number | null;
-  paymentStatus?: ('not_required' | 'pending' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
-  paymentProvider?: 'p24' | null;
-  payment?: (number | null) | Payment;
-  groupId?: string | null;
-  reservationNumber?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "payments".
- */
-export interface Payment {
-  id: number;
-  provider: 'p24';
-  status: 'pending' | 'paid' | 'failed' | 'refunded';
-  amount: number;
-  currency?: string | null;
-  p24SessionId?: string | null;
-  p24OrderId?: string | null;
-  p24Sign?: string | null;
-  reservation?: (number | null) | Reservation;
-  raw?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
+  reason?: string | null;
+  active?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -526,77 +555,62 @@ export interface OccasionalInquiry {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "blackouts".
+ * via the `definition` "menu-categories".
  */
-export interface Blackout {
+export interface MenuCategory {
   id: number;
-  title: string;
-  service: 'bowling' | 'billiard';
-  day: string;
-  allDay?: boolean | null;
-  startHour?:
-    | (
-        | '0'
-        | '1'
-        | '2'
-        | '3'
-        | '4'
-        | '5'
-        | '6'
-        | '7'
-        | '8'
-        | '9'
-        | '10'
-        | '11'
-        | '12'
-        | '13'
-        | '14'
-        | '15'
-        | '16'
-        | '17'
-        | '18'
-        | '19'
-        | '20'
-        | '21'
-        | '22'
-        | '23'
-      )
-    | null;
-  startMinute?: ('0' | '15' | '30' | '45') | null;
-  endHour?:
-    | (
-        | '0'
-        | '1'
-        | '2'
-        | '3'
-        | '4'
-        | '5'
-        | '6'
-        | '7'
-        | '8'
-        | '9'
-        | '10'
-        | '11'
-        | '12'
-        | '13'
-        | '14'
-        | '15'
-        | '16'
-        | '17'
-        | '18'
-        | '19'
-        | '20'
-        | '21'
-        | '22'
-        | '23'
-      )
-    | null;
-  endMinute?: ('0' | '15' | '30' | '45') | null;
-  resources?: (number | Resource)[] | null;
-  reason?: string | null;
+  name: string;
+  order?: number | null;
   active?: boolean | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menu-items".
+ */
+export interface MenuItem {
+  id: number;
+  name: string;
+  description?: string | null;
+  image?: (number | null) | Media;
+  category: number | MenuCategory;
+  price: number;
+  promo?: {
+    enabled?: boolean | null;
+    promoPrice?: number | null;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  };
+  order?: number | null;
+  active?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  role: 'admin' | 'staff';
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -623,16 +637,20 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
-        relationTo: 'users';
-        value: number | User;
+        relationTo: 'reservations';
+        value: number | Reservation;
       } | null)
     | ({
-        relationTo: 'media';
-        value: number | Media;
+        relationTo: 'payments';
+        value: number | Payment;
       } | null)
     | ({
-        relationTo: 'events';
-        value: number | Event;
+        relationTo: 'blackouts';
+        value: number | Blackout;
+      } | null)
+    | ({
+        relationTo: 'occasional-inquiries';
+        value: number | OccasionalInquiry;
       } | null)
     | ({
         relationTo: 'menu-categories';
@@ -643,24 +661,20 @@ export interface PayloadLockedDocument {
         value: number | MenuItem;
       } | null)
     | ({
+        relationTo: 'events';
+        value: number | Event;
+      } | null)
+    | ({
+        relationTo: 'media';
+        value: number | Media;
+      } | null)
+    | ({
         relationTo: 'resources';
         value: number | Resource;
       } | null)
     | ({
-        relationTo: 'reservations';
-        value: number | Reservation;
-      } | null)
-    | ({
-        relationTo: 'occasional-inquiries';
-        value: number | OccasionalInquiry;
-      } | null)
-    | ({
-        relationTo: 'payments';
-        value: number | Payment;
-      } | null)
-    | ({
-        relationTo: 'blackouts';
-        value: number | Blackout;
+        relationTo: 'users';
+        value: number | User;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -706,122 +720,6 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users_select".
- */
-export interface UsersSelect<T extends boolean = true> {
-  role?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
-  sessions?:
-    | T
-    | {
-        id?: T;
-        createdAt?: T;
-        expiresAt?: T;
-      };
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media_select".
- */
-export interface MediaSelect<T extends boolean = true> {
-  alt?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  url?: T;
-  thumbnailURL?: T;
-  filename?: T;
-  mimeType?: T;
-  filesize?: T;
-  width?: T;
-  height?: T;
-  focalX?: T;
-  focalY?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "events_select".
- */
-export interface EventsSelect<T extends boolean = true> {
-  title?: T;
-  description?: T;
-  kind?: T;
-  pricePLN?: T;
-  status?: T;
-  day?: T;
-  startHour?: T;
-  startMinute?: T;
-  endHour?: T;
-  endMinute?: T;
-  startsAt?: T;
-  endsAt?: T;
-  showOnHomepage?: T;
-  blocksVenue?: T;
-  blockAllDay?: T;
-  image?: T;
-  capacity?: T;
-  registrationsEnabled?: T;
-  published?: T;
-  takenSeats?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "menu-categories_select".
- */
-export interface MenuCategoriesSelect<T extends boolean = true> {
-  name?: T;
-  order?: T;
-  active?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "menu-items_select".
- */
-export interface MenuItemsSelect<T extends boolean = true> {
-  name?: T;
-  description?: T;
-  image?: T;
-  category?: T;
-  price?: T;
-  promo?:
-    | T
-    | {
-        enabled?: T;
-        promoPrice?: T;
-        startsAt?: T;
-        endsAt?: T;
-      };
-  order?: T;
-  active?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "resources_select".
- */
-export interface ResourcesSelect<T extends boolean = true> {
-  type?: T;
-  number?: T;
-  label?: T;
-  active?: T;
-  notes?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "reservations_select".
  */
 export interface ReservationsSelect<T extends boolean = true> {
@@ -846,6 +744,17 @@ export interface ReservationsSelect<T extends boolean = true> {
   partySize?: T;
   tablesCount?: T;
   resources?: T;
+  segments?:
+    | T
+    | {
+        resource?: T;
+        startHour?: T;
+        startMinute?: T;
+        endHour?: T;
+        endMinute?: T;
+        price?: T;
+        id?: T;
+      };
   event?: T;
   disabledPerson?: T;
   disabilityDetails?: T;
@@ -866,36 +775,6 @@ export interface ReservationsSelect<T extends boolean = true> {
   payment?: T;
   groupId?: T;
   reservationNumber?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "occasional-inquiries_select".
- */
-export interface OccasionalInquiriesSelect<T extends boolean = true> {
-  type?: T;
-  date?: T;
-  allDay?: T;
-  startHour?: T;
-  startMinute?: T;
-  endHour?: T;
-  endMinute?: T;
-  startsAt?: T;
-  endsAt?: T;
-  people?: T;
-  name?: T;
-  phone?: T;
-  email?: T;
-  notes?: T;
-  status?: T;
-  payment?:
-    | T
-    | {
-        paid?: T;
-        depositAmount?: T;
-        totalAmount?: T;
-      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -937,6 +816,152 @@ export interface BlackoutsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "occasional-inquiries_select".
+ */
+export interface OccasionalInquiriesSelect<T extends boolean = true> {
+  type?: T;
+  date?: T;
+  allDay?: T;
+  startHour?: T;
+  startMinute?: T;
+  endHour?: T;
+  endMinute?: T;
+  startsAt?: T;
+  endsAt?: T;
+  people?: T;
+  name?: T;
+  phone?: T;
+  email?: T;
+  notes?: T;
+  status?: T;
+  payment?:
+    | T
+    | {
+        paid?: T;
+        depositAmount?: T;
+        totalAmount?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menu-categories_select".
+ */
+export interface MenuCategoriesSelect<T extends boolean = true> {
+  name?: T;
+  order?: T;
+  active?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "menu-items_select".
+ */
+export interface MenuItemsSelect<T extends boolean = true> {
+  name?: T;
+  description?: T;
+  image?: T;
+  category?: T;
+  price?: T;
+  promo?:
+    | T
+    | {
+        enabled?: T;
+        promoPrice?: T;
+        startsAt?: T;
+        endsAt?: T;
+      };
+  order?: T;
+  active?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "events_select".
+ */
+export interface EventsSelect<T extends boolean = true> {
+  title?: T;
+  description?: T;
+  kind?: T;
+  pricePLN?: T;
+  status?: T;
+  day?: T;
+  startHour?: T;
+  startMinute?: T;
+  endHour?: T;
+  endMinute?: T;
+  startsAt?: T;
+  endsAt?: T;
+  showOnHomepage?: T;
+  blocksVenue?: T;
+  blockAllDay?: T;
+  image?: T;
+  capacity?: T;
+  registrationsEnabled?: T;
+  published?: T;
+  takenSeats?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media_select".
+ */
+export interface MediaSelect<T extends boolean = true> {
+  alt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "resources_select".
+ */
+export interface ResourcesSelect<T extends boolean = true> {
+  type?: T;
+  number?: T;
+  label?: T;
+  active?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users_select".
+ */
+export interface UsersSelect<T extends boolean = true> {
+  role?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -974,33 +999,6 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "site-settings".
- */
-export interface SiteSetting {
-  id: number;
-  name: string;
-  slogan?: string | null;
-  description?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  address?: string | null;
-  nip?: string | null;
-  facebook?: string | null;
-  instagram?: string | null;
-  openingHours?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  updatedAt?: string | null;
-  createdAt?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1052,22 +1050,30 @@ export interface ReservationSetting {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "site-settings_select".
+ * via the `definition` "site-settings".
  */
-export interface SiteSettingsSelect<T extends boolean = true> {
-  name?: T;
-  slogan?: T;
-  description?: T;
-  phone?: T;
-  email?: T;
-  address?: T;
-  nip?: T;
-  facebook?: T;
-  instagram?: T;
-  openingHours?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  globalType?: T;
+export interface SiteSetting {
+  id: number;
+  name: string;
+  slogan?: string | null;
+  description?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  nip?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  openingHours?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1119,6 +1125,25 @@ export interface ReservationSettingsSelect<T extends boolean = true> {
       };
   regulationsPdf?: T;
   privacyPolicyPdf?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings_select".
+ */
+export interface SiteSettingsSelect<T extends boolean = true> {
+  name?: T;
+  slogan?: T;
+  description?: T;
+  phone?: T;
+  email?: T;
+  address?: T;
+  nip?: T;
+  facebook?: T;
+  instagram?: T;
+  openingHours?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

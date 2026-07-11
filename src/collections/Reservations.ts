@@ -77,7 +77,7 @@ export const Reservations: CollectionConfig = {
   labels: { singular: "Rezerwacja", plural: "Rezerwacje" },
 
   admin: {
-    group: "Rezerwacje",
+    group: "Obsługa",
     useAsTitle: "reservationNumber",
     defaultColumns: ["type", "startsAt", "status", "customer.phone", "paymentStatus"],
     components: {
@@ -410,6 +410,52 @@ export const Reservations: CollectionConfig = {
         if (!Array.isArray(val) || val.length === 0) return "Wybierz co najmniej jeden zasób.";
         return true;
       },
+    },
+
+    // Segmenty per zasób (kregle/bilard) — generowane automatycznie
+    {
+      name: "segments",
+      label: "Tory / Stoły",
+      type: "array",
+      admin: {
+        condition: (_, s) => s?.type === "kregle" || s?.type === "bilard",
+        description: "Szczegóły czasowe per zasób — generowane automatycznie przy rezerwacji online",
+      },
+      fields: [
+        {
+          name: "resource",
+          label: "Zasób",
+          type: "relationship",
+          relationTo: "resources",
+        },
+        {
+          name: "startHour",
+          label: "Start (godz.)",
+          type: "number",
+        },
+        {
+          name: "startMinute",
+          label: "Start (min.)",
+          type: "number",
+          defaultValue: 0,
+        },
+        {
+          name: "endHour",
+          label: "Koniec (godz.)",
+          type: "number",
+        },
+        {
+          name: "endMinute",
+          label: "Koniec (min.)",
+          type: "number",
+          defaultValue: 0,
+        },
+        {
+          name: "price",
+          label: "Cena (zł)",
+          type: "number",
+        },
+      ],
     },
 
     // Biznes
