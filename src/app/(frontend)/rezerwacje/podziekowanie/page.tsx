@@ -1,0 +1,238 @@
+import Link from "next/link"
+import { CheckCircle, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { getPayload } from "payload"
+import config from "@payload-config"
+
+export const dynamic = "force-dynamic"
+
+export const metadata = {
+  title: "Dziękujemy za rezerwację | Centrum Spotkań Black",
+  description: "Rezerwacja przyjęta. Potwierdzenie zostanie wysłane e-mailem.",
+}
+
+function fmt2(n: number) {
+  return String(n).padStart(2, "0")
+}
+
+function formatStatus(status: string) {
+  if (status === "paid") return "Opłacono"
+  if (status === "pending") return "Oczekuje na potwierdzenie płatności"
+  if (status === "failed") return "Płatność nieudana"
+  if (status === "not_required") return "Płatność nie jest wymagana"
+  return status
+}
+
+function formatType(type: string) {
+  if (type === "kregle") return "Kręgle"
+  if (type === "bilard") return "Bilard"
+  if (type === "stolik") return "Stolik"
+  if (type === "biznes") return "Wydarzenie biznesowe"
+  if (type === "impreza") return "Impreza"
+  return type
+}
+
+export default async function PodziekowaniePageWrapper({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[]>>
+}) {
+  const params = await searchParams
+  const sessionId = typeof params.sessionId === "string" ? params.sessionId : ""
+
+  let docs: any[] = []
+
+  if (sessionId) {
+    try {
+      const payload = await getPayload({ config })
+      const result = await payload.find({
+        collection: "reservations",
+        limit: 20,
+        depth: 1,
+        where: { groupId: { equals: sessionId } },
+        overrideAccess: true,
+      })
+      docs = result.docs as any[]
+    } catch (err) {
+      console.error("[podziekowanie] Błąd pobierania rezerwacji:", err)
+    }
+  }
+
+  const first = docs[0]
+  const isPaid = docs.length > 0 && docs.every((d) => d.paymentStatus === "paid")
+  const isPending = docs.length > 0 && docs.some((d) => d.paymentStatus === "pending")
+  const isNotRequired = docs.length > 0 && docs.every((d) => d.paymentStatus === "not_required")
+
+  const dateISO = first ? String(first.day ?? "").slice(0, 10) : ""
+  const [y, m, d] = dateISO ? dateISO.split("-") : ["", "", ""]
+  const dateDisplay = dateISO ? `${d}.${m}.${y}` : ""
+
+  const totalPLN = docs.reduce((acc, doc) => acc + Number(doc.depositAmount ?? 0), 0)
+
+  const firstType = first?.type as string | undefined
+  const isEvent = firstType === "impreza" || firstType === "biznes"
+
+  let eventTitle: string | null = null
+  const eventPartySize = isEvent ? (Number(first?.partySize) || null) : null
+
+  if (isEvent && first?.event) {
+    const eventId = typeof first.event === "string" ? first.event : String((first.event as any)?.id ?? "")
+    if (eventId) {
+      try {
+        const payload = await getPayload({ config })
+        const eventDoc = await payload.findByID({
+          collection: "events",
+          id: eventId,
+          depth: 0,
+          overrideAccess: true,
+          context: { skipTakenSeats: true } as any,
+        })
+        eventTitle = (eventDoc as any)?.title ?? null
+      } catch {}
+    }
+  }
+
+  const segments = isEvent ? [] : docs.map((doc) => {
+    const resourceList = (doc.resources as any[]) ?? []
+    const resourceNumber = resourceList[0]?.number ?? "?"
+    const type = doc.type as string
+    const resourceLabel = type === "kregle" ? `Tor ${resourceNumber}` : `Stół ${resourceNumber}`
+    const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
+    const endHH = `${fmt2(Number(doc.endHour ?? 0))}:${fmt2(Number(doc.endMinute ?? 0))}`
+    return { resourceLabel, startHH, endHH, reservationNumber: String(doc.reservationNumber ?? doc.id) }
+  })
+
+  const eventStartHH = isEvent && first?.startHour != null
+    ? `${fmt2(Number(first.startHour ?? 0))}:${fmt2(Number(first.startMinute ?? 0))}`
+    : null
+
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-lg">
+        <div className="mb-6 flex justify-center">
+          {isPaid || isNotRequired ? (
+            <CheckCircle className="h-16 w-16 text-green-500" />
+          ) : (
+            <Clock className="h-16 w-16 text-amber-500" />
+          )}
+        </div>
+
+        <h1 className="mb-3 text-3xl font-bold tracking-tight">Dziękujemy!</h1>
+
+        {docs.length > 0 ? (
+          <>
+            <p className="mb-6 text-base text-muted-foreground">
+              {isPaid || isNotRequired
+                ? "Rezerwacja potwierdzona. Potwierdzenie zostało wysłane na podany adres e-mail."
+                : "Rezerwacja przyjęta. Oczekujemy na potwierdzenie płatności przez Przelewy24."}
+            </p>
+
+            <div className="mb-8 rounded-2xl border bg-card px-6 py-5 text-left">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Szczegóły rezerwacji
+                </span>
+                <span
+                  className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
+                    isPaid
+                      ? "bg-green-100 text-green-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {formatStatus(first?.paymentStatus ?? "")}
+                </span>
+              </div>
+
+              <dl className="grid gap-3">
+                <div className="flex justify-between text-sm">
+                  <dt className="text-muted-foreground">Usługa</dt>
+                  <dd className="font-medium">{formatType(first?.type ?? "")}</dd>
+                </div>
+
+                {eventTitle ? (
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-muted-foreground">Wydarzenie</dt>
+                    <dd className="font-medium text-right max-w-[200px]">{eventTitle}</dd>
+                  </div>
+                ) : null}
+
+                {dateDisplay ? (
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-muted-foreground">Data</dt>
+                    <dd className="font-medium">
+                      {dateDisplay}
+                      {eventStartHH ? `, godz. ${eventStartHH}` : ""}
+                    </dd>
+                  </div>
+                ) : null}
+
+                {eventPartySize ? (
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-muted-foreground">Liczba osób</dt>
+                    <dd className="font-medium">{eventPartySize}</dd>
+                  </div>
+                ) : null}
+
+                {segments.length > 0 && (
+                  <div className="border-t pt-3">
+                    <dt className="mb-2 text-sm text-muted-foreground">Zarezerwowane</dt>
+                    <dd>
+                      <ul className="grid gap-1.5">
+                        {segments.map((s, i) => (
+                          <li key={i} className="flex items-center justify-between text-sm">
+                            <span className="font-medium">{s.resourceLabel}</span>
+                            <span className="text-muted-foreground">
+                              {s.startHH}–{s.endHH}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </dd>
+                  </div>
+                )}
+
+                {totalPLN > 0 && (
+                  <div className="flex justify-between border-t pt-3 text-sm">
+                    <dt className="text-muted-foreground">Kwota</dt>
+                    <dd className="font-semibold">{totalPLN.toFixed(2)} zł</dd>
+                  </div>
+                )}
+
+                {(isEvent ? first?.reservationNumber : segments[0]?.reservationNumber) && (
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-muted-foreground">Numer rezerwacji</dt>
+                    <dd className="font-mono text-xs font-semibold">
+                      {isEvent
+                        ? String(first?.reservationNumber ?? "")
+                        : [...new Set(segments.map((s) => s.reservationNumber))].join(", ")}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {isPending && (
+              <p className="mb-6 text-sm text-muted-foreground">
+                Status płatności zaktualizuje się automatycznie po potwierdzeniu przez Przelewy24.
+                Potwierdzenie zostanie wysłane e-mailem.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mb-8 text-muted-foreground">
+            Rezerwacja przyjęta. Potwierdzenie zostanie wysłane na podany adres e-mail.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Link href="/">Strona główna</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/rezerwacje">Rezerwacje</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
