@@ -548,7 +548,9 @@ export interface OccasionalInquiry {
   payment?: {
     paid?: boolean | null;
     depositAmount?: number | null;
+    depositPaid?: boolean | null;
     totalAmount?: number | null;
+    totalPaid?: boolean | null;
   };
   updatedAt: string;
   createdAt: string;
@@ -839,7 +841,9 @@ export interface OccasionalInquiriesSelect<T extends boolean = true> {
     | {
         paid?: T;
         depositAmount?: T;
+        depositPaid?: T;
         totalAmount?: T;
+        totalPaid?: T;
       };
   updatedAt?: T;
   createdAt?: T;

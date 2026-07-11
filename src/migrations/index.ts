@@ -7,6 +7,7 @@ import * as migration_20260705_add_reservation_number from './20260705_add_reser
 import * as migration_20260708_add_event_type_fields from './20260708_add_event_type_fields';
 import * as migration_20260708_fix_events_kind from './20260708_fix_events_kind';
 import * as migration_20260712_add_reservation_segments from './20260712_add_reservation_segments';
+import * as migration_20260712_add_occasional_inquiry_payment_fields from './20260712_add_occasional_inquiry_payment_fields';
 
 export const migrations = [
   {
@@ -53,5 +54,10 @@ export const migrations = [
     up: migration_20260712_add_reservation_segments.up,
     down: migration_20260712_add_reservation_segments.down,
     name: '20260712_add_reservation_segments',
+  },
+  {
+    up: migration_20260712_add_occasional_inquiry_payment_fields.up,
+    down: migration_20260712_add_occasional_inquiry_payment_fields.down,
+    name: '20260712_add_occasional_inquiry_payment_fields',
   },
 ];

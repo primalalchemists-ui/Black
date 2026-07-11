@@ -229,9 +229,14 @@ export const OccasionalInquiries: CollectionConfig = {
       label: "Płatność",
       type: "group",
       fields: [
-        { name: "paid", label: "Opłacone", type: "checkbox", defaultValue: false },
+        // Stare pole — zachowane w DB, ukryte w adminie
+        { name: "paid", label: "Opłacone (stare)", type: "checkbox", defaultValue: false, admin: { hidden: true } },
+
         { name: "depositAmount", label: "Zaliczka (PLN)", type: "number" },
+        { name: "depositPaid", label: "Zaliczka opłacona", type: "checkbox", defaultValue: false },
+
         { name: "totalAmount", label: "Kwota całkowita (PLN)", type: "number" },
+        { name: "totalPaid", label: "Całość opłacona", type: "checkbox", defaultValue: false },
       ],
     },
   ],

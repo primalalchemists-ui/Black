@@ -14,6 +14,16 @@ type Inquiry = {
   email?: string
   people?: number
   status?: string
+  payment?: {
+    depositPaid?: boolean
+    totalPaid?: boolean
+  }
+}
+
+function getPaymentStatus(payment: Inquiry["payment"]): { label: string; cls: string } {
+  if (payment?.totalPaid)   return { label: "Całość opłacona",    cls: "paid" }
+  if (payment?.depositPaid) return { label: "Zaliczka opłacona",  cls: "pending" }
+  return                           { label: "Brak płatności",      cls: "not_required" }
 }
 
 type ApiResult = {
@@ -234,6 +244,7 @@ export function OccasionalInquiriesListView() {
                 <th>Telefon</th>
                 <th>Osób</th>
                 <th>Status</th>
+                <th>Płatność</th>
                 <th aria-label="Akcje" />
               </tr>
             </thead>
@@ -249,6 +260,11 @@ export function OccasionalInquiriesListView() {
                     <span className={`black-admin-list__status black-admin-list__status--${r.status ?? "new"}`}>
                       {STATUS_LABELS[r.status ?? ""] ?? r.status ?? "—"}
                     </span>
+                  </td>
+                  <td>
+                    {(() => { const p = getPaymentStatus(r.payment); return (
+                      <span className={`black-admin-list__payment black-admin-list__payment--${p.cls}`}>{p.label}</span>
+                    )})()}
                   </td>
                   <td>
                     <a href={`/admin/collections/occasional-inquiries/${r.id}`} className="black-admin-list__action-link">
