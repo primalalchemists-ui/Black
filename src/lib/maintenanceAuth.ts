@@ -32,6 +32,8 @@ export function maintenancePageHtml(opts: { redirectTo?: string; error?: string 
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:36px 32px;width:100%;max-width:380px}
+.logo{display:flex;justify-content:center;margin-bottom:24px}
+.logo img{height:44px;width:auto;object-fit:contain}
 h1{font-size:1.05rem;font-weight:700;color:#f0f6fc;margin-bottom:8px}
 .info{font-size:.85rem;color:#8b949e;margin-bottom:22px;line-height:1.6}
 label{display:block;font-size:.75rem;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
@@ -43,7 +45,7 @@ button:hover{background:#2ea043}
 </head>
 <body>
 <div class="card">
-<h1>Centrum Spotkań BLACK</h1>
+<div class="logo"><img src="/images/logo/logo-2.png" alt="Centrum Spotkań BLACK"></div>
 <p class="info">Strona jest chwilowo niedostępna z powodu prac technicznych.</p>
 ${errorHtml}<form method="POST" action="/api/maintenance/login">
 <input type="hidden" name="redirect" value="${redirect}">

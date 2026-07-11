@@ -37,7 +37,9 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Wyklucza /api/*, /_next/*, favicon — nigdy nie pokazuj im strony maintenance.
-  // /api/payments/p24/status i /api/maintenance/* są wykluczone przez ten matcher.
-  matcher: ["/((?!api/|_next/|favicon\\.ico).*)"],
+  // Wyklucza /api/*, /_next/*, /images/*, favicon — nigdy nie pokazuj im strony maintenance.
+  // /images/* musi być wykluczone bo Next.js image optimizer pobiera lokalny plik via
+  // wewnętrzne żądanie HTTP do /images/... — bez ciasteczka, więc middleware zwróciłoby
+  // stronę maintenance zamiast obrazka, powodując 400 w /_next/image.
+  matcher: ["/((?!api/|_next/|images/|favicon\\.ico).*)"],
 }

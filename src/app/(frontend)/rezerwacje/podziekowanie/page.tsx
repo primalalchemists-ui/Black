@@ -92,14 +92,23 @@ export default async function PodziekowaniePageWrapper({
     }
   }
 
-  const segments = isEvent ? [] : docs.map((doc) => {
+  const segments = isEvent ? [] : docs.flatMap((doc) => {
     const resourceList = (doc.resources as any[]) ?? []
-    const resourceNumber = resourceList[0]?.number ?? "?"
     const type = doc.type as string
-    const resourceLabel = type === "kregle" ? `Tor ${resourceNumber}` : `Stół ${resourceNumber}`
     const startHH = `${fmt2(Number(doc.startHour ?? 0))}:${fmt2(Number(doc.startMinute ?? 0))}`
     const endHH = `${fmt2(Number(doc.endHour ?? 0))}:${fmt2(Number(doc.endMinute ?? 0))}`
-    return { resourceLabel, startHH, endHH, reservationNumber: String(doc.reservationNumber ?? doc.id) }
+    const reservationNumber = String(doc.reservationNumber ?? doc.id)
+    const nums = resourceList
+      .map((r: any) => (r && typeof r === "object" ? r.number : null))
+      .filter((n: any) => n != null)
+    if (!nums.length) {
+      const resourceLabel = type === "kregle" ? "Tor ?" : "Stół ?"
+      return [{ resourceLabel, startHH, endHH, reservationNumber }]
+    }
+    return nums.map((num: any) => {
+      const resourceLabel = type === "kregle" ? `Tor ${num}` : `Stół ${num}`
+      return { resourceLabel, startHH, endHH, reservationNumber }
+    })
   })
 
   const eventStartHH = isEvent && first?.startHour != null

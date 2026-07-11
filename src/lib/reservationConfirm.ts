@@ -160,13 +160,21 @@ export async function confirmGroupPayment(
       const [y, m, d] = dateISO.split("-")
       const dateDisplay = `${d}.${m}.${y}`
 
-      const segments = docs.map((doc) => {
+      const segments = docs.flatMap((doc) => {
         const resourceList = (doc.resources as any[]) ?? []
-        const resourceNumber = resourceList[0]?.number ?? "?"
-        const resourceLabel = laneType === "kregle" ? `Tor ${resourceNumber}` : `Stół ${resourceNumber}`
         const startHH = `${String(doc.startHour ?? 0).padStart(2, "0")}:${String(doc.startMinute ?? 0).padStart(2, "0")}`
         const endHH = `${String(doc.endHour ?? 0).padStart(2, "0")}:${String(doc.endMinute ?? 0).padStart(2, "0")}`
-        return { resourceLabel, startHH, endHH }
+        const nums = resourceList
+          .map((r: any) => (r && typeof r === "object" ? r.number : null))
+          .filter((n: any) => n != null)
+        if (!nums.length) {
+          const resourceLabel = laneType === "kregle" ? "Tor ?" : "Stół ?"
+          return [{ resourceLabel, startHH, endHH }]
+        }
+        return nums.map((num: any) => {
+          const resourceLabel = laneType === "kregle" ? `Tor ${num}` : `Stół ${num}`
+          return { resourceLabel, startHH, endHH }
+        })
       })
 
       if (clientEmail) {
