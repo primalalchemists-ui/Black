@@ -214,13 +214,13 @@ export default async function PodziekowaniePageWrapper({
                   </div>
                 )}
 
-                {(isEvent ? first?.reservationNumber : segments[0]?.reservationNumber) && (
+                {(isEvent ? first?.reservationNumber : docs.find((d: any) => d.reservationNumber)?.reservationNumber) && (
                   <div className="flex justify-between text-sm">
                     <dt className="text-muted-foreground">Numer rezerwacji</dt>
                     <dd className="font-mono text-xs font-semibold">
                       {isEvent
                         ? String(first?.reservationNumber ?? "")
-                        : [...new Set(segments.map((s) => s.reservationNumber))].join(", ")}
+                        : String(docs.find((d: any) => d.reservationNumber)?.reservationNumber ?? "")}
                     </dd>
                   </div>
                 )}

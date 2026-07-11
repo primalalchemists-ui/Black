@@ -514,42 +514,52 @@ export async function POST(req: Request) {
     console.log(`[kregle] P24 payUrl=${p24PayUrl} groupId=${groupId}`)
 
     // Zapis do bazy — jeden rekord per tor (własny czas każdego)
+    // reservationNumber tylko na pierwszym rekordzie — DB ma UNIQUE INDEX na tym polu
     const dayISO2 = startOfLocalDayISO(toCreate[0].startsAt)
     const createdDocs: any[] = []
-    for (const seg of toCreate) {
-      const segDoc = await payload.create({
-        collection: "reservations",
-        data: {
-          type: "kregle",
-          day: dayISO2,
-          groupId,
-          reservationNumber: groupReservationNumber,
+    try {
+      for (let i = 0; i < toCreate.length; i++) {
+        const seg = toCreate[i]
+        const segDoc = await payload.create({
+          collection: "reservations",
+          data: {
+            type: "kregle",
+            day: dayISO2,
+            groupId,
+            reservationNumber: i === 0 ? groupReservationNumber : undefined,
 
-          customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-          notes: data.notes || "",
+            customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+            notes: data.notes || "",
 
-          startsAt: seg.startsAt.toISOString(),
-          endsAt: seg.endsAt.toISOString(),
+            startsAt: seg.startsAt.toISOString(),
+            endsAt: seg.endsAt.toISOString(),
 
-          startHour: seg.startsAt.getHours(),
-          startMinute: seg.startsAt.getMinutes(),
-          endHour: seg.endsAt.getHours(),
-          endMinute: seg.endsAt.getMinutes(),
+            startHour: seg.startsAt.getHours(),
+            startMinute: seg.startsAt.getMinutes(),
+            endHour: seg.endsAt.getHours(),
+            endMinute: seg.endsAt.getMinutes(),
 
-          resources: [seg.resourceId],
-          invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
-          acceptRules: data.acceptRules,
+            resources: [seg.resourceId],
+            invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
+            acceptRules: data.acceptRules,
 
-          source: "online",
-          status: "new",
+            source: "online",
+            status: "new",
 
-          depositRequired: amountToPay > 0,
-          depositAmount: amountToPay > 0 ? seg.segmentPrice : 0,
-          paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
-          paymentProvider: amountGrosze > 0 ? "p24" : undefined,
-        } as any,
-      })
-      createdDocs.push(segDoc)
+            depositRequired: amountToPay > 0,
+            depositAmount: amountToPay > 0 ? seg.segmentPrice : 0,
+            paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
+            paymentProvider: amountGrosze > 0 ? "p24" : undefined,
+          } as any,
+        })
+        createdDocs.push(segDoc)
+      }
+    } catch (createErr) {
+      // usuń już zapisane rekordy żeby nie blokować slotów
+      for (const d of createdDocs) {
+        await payload.delete({ collection: "reservations", id: d.id, overrideAccess: true }).catch(() => {})
+      }
+      throw createErr
     }
 
     const createdIds = createdDocs.map(d => d.id)

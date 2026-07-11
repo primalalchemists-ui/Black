@@ -84,7 +84,10 @@ export async function confirmGroupPayment(
     const mail = getMailClient()
 
     const totalPLN = docs.reduce((acc, doc) => acc + Number(doc.depositAmount ?? 0), 0)
-    const reservationNumbers = [...new Set(docs.map((doc) => String(doc.reservationNumber ?? doc.id)))]
+    const reservationNumbers = (() => {
+      const nums = docs.flatMap((doc) => doc.reservationNumber ? [String(doc.reservationNumber)] : [])
+      return nums.length ? [...new Set(nums)] : [String(docs[0]?.id ?? "")]
+    })()
 
     if (type === "impreza" || type === "biznes") {
       const eventObj = typeof first.event === "object" ? first.event : null

@@ -80,7 +80,7 @@ export function EventSlide({
           </h3>
 
           {e.description?.trim() && (
-            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
               {e.description}
             </p>
           )}
