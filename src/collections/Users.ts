@@ -13,6 +13,7 @@ export const Users: CollectionConfig = {
   admin: {
     group: 'Administracja',
     useAsTitle: 'email',
+    disableDuplicate: true,
     components: {
       views: {
         list: {

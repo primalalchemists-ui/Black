@@ -84,20 +84,13 @@ export function getVenueBlockedMessage(): string {
 }
 
 /**
- * Sprawdza czy dany dzień jest zablokowany przez wydarzenie z blocksVenue=true.
- * Opcjonalnie sprawdza konkretną godzinę (checkHour/checkMinute).
+ * Pobiera wszystkie wydarzenia blokujące lokal na dany dzień.
  */
-export async function getBlockingEvent(
-  dateStr: string,
-  checkHour?: number,
-  checkMinute?: number,
-): Promise<{ blocked: boolean; eventTitle?: string }> {
+export async function getBlockingEventsForDay(dateStr: string): Promise<any[]> {
   try {
     const payload = await getPayload({ config })
-
     const dayStart = new Date(dateStr + "T00:00:00.000Z").toISOString()
     const dayEnd = new Date(dateStr + "T23:59:59.999Z").toISOString()
-
     const result = await payload.find({
       collection: "events",
       limit: 20,
@@ -111,11 +104,45 @@ export async function getBlockingEvent(
         ],
       },
     })
+    return result.docs as any[]
+  } catch {
+    return []
+  }
+}
 
-    if (!result.docs.length) return { blocked: false }
+/**
+ * Sprawdza czy konkretny slot (godzina:minuta) jest zablokowany przez któreś z przekazanych wydarzeń.
+ * Eventy z blockAllDay=true blokują cały dzień.
+ * Eventy bez blockAllDay blokują tylko przedział startHour–endHour (lub startHour–24:00 gdy brak końca).
+ */
+export function isSlotBlockedByVenueEvent(events: any[], slotHour: number, slotMinute: number): boolean {
+  for (const event of events) {
+    if (event.allDay || event.blockAllDay) return true
+    const eventStartMins = (Number(event.startHour) || 0) * 60 + (Number(event.startMinute) || 0)
+    const eventEndMins = event.endHour != null
+      ? Number(event.endHour) * 60 + (Number(event.endMinute) || 0)
+      : 24 * 60
+    const slotMins = slotHour * 60 + slotMinute
+    if (slotMins >= eventStartMins && slotMins < eventEndMins) return true
+  }
+  return false
+}
 
-    for (const event of result.docs as any[]) {
-      // Całodniowe lub blockAllDay → blokuje cały dzień
+/**
+ * Sprawdza czy dany dzień jest zablokowany przez wydarzenie z blocksVenue=true.
+ * Opcjonalnie sprawdza konkretną godzinę (checkHour/checkMinute).
+ * Bez checkHour: blokuje tylko gdy blockAllDay=true (częściowe blokady są sprawdzane per-slot).
+ */
+export async function getBlockingEvent(
+  dateStr: string,
+  checkHour?: number,
+  checkMinute?: number,
+): Promise<{ blocked: boolean; eventTitle?: string }> {
+  try {
+    const events = await getBlockingEventsForDay(dateStr)
+    if (!events.length) return { blocked: false }
+
+    for (const event of events) {
       if (event.allDay || event.blockAllDay) {
         return { blocked: true, eventTitle: event.title }
       }
@@ -129,9 +156,8 @@ export async function getBlockingEvent(
         if (checkMins >= eventStart && checkMins < eventEnd) {
           return { blocked: true, eventTitle: event.title }
         }
-      } else {
-        return { blocked: true, eventTitle: event.title }
       }
+      // bez checkHour i bez blockAllDay → nie blokujemy całego dnia
     }
 
     return { blocked: false }

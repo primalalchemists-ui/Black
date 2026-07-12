@@ -43,7 +43,7 @@ function buildDateTimeFromDayHourMinuteUTC(day: string | Date, hourStr: string, 
 // ✅ ANTI-OVERLAP + PAST GUARDS
 // =======================
 
-const IGNORED_STATUSES = ["cancelled", "no_show"] as const;
+const IGNORED_STATUSES = ["cancelled", "no_show", "completed"] as const;
 
 // UWAGA: completed traktujemy jako "historyczne" i NIE blokujemy (dla staff/admin)
 // Jeśli chcesz jednak też blokować completed, usuń go z logiki poniżej.
@@ -79,6 +79,7 @@ export const Reservations: CollectionConfig = {
   admin: {
     group: "Obsługa",
     useAsTitle: "reservationNumber",
+    disableDuplicate: true,
     defaultColumns: ["type", "startsAt", "status", "customer.phone", "paymentStatus"],
     components: {
       views: {

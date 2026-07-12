@@ -9,6 +9,7 @@ export const Resources: CollectionConfig = {
   admin: {
     group: 'Ustawienia',
     useAsTitle: 'label',
+    disableDuplicate: true,
     components: {
       views: {
         list: {

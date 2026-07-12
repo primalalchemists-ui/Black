@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Calendar, Clock, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function EventSlide({
 
   const showCtaButton = Boolean(href);
   const showActionButton = Boolean(actionLabel && onAction);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   return (
     <div className="relative overflow-hidden rounded-[14px] border border-border bg-card shadow-[0_8px_32px_-8px_rgba(0,0,0,0.10)]">
@@ -80,9 +82,18 @@ export function EventSlide({
           </h3>
 
           {e.description?.trim() && (
-            <p className="line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-              {e.description}
-            </p>
+            <div className="relative z-20">
+              <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground${descExpanded ? "" : " line-clamp-4"}`}>
+                {e.description}
+              </p>
+              <button
+                type="button"
+                onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); setDescExpanded((x) => !x); }}
+                className="pointer-events-auto mt-1 text-xs font-medium text-[hsl(var(--brand))] hover:underline"
+              >
+                {descExpanded ? "Zwiń" : "Czytaj więcej"}
+              </button>
+            </div>
           )}
 
           <div className="flex flex-col gap-2 text-sm">
@@ -125,7 +136,14 @@ export function EventSlide({
           {(showCtaButton || showActionButton) && (
             <div className="relative z-20 mt-auto pt-2">
               {showCtaButton && href && (
-                spotsLeft === 0 ? (
+                e.registrationsEnabled === false ? (
+                  <Button
+                    disabled
+                    className="pointer-events-auto w-full bg-primary text-primary-foreground opacity-50 cursor-not-allowed"
+                  >
+                    Zapisy zamknięte
+                  </Button>
+                ) : spotsLeft === 0 ? (
                   <Button
                     disabled
                     className="pointer-events-auto w-full bg-primary text-primary-foreground opacity-50 cursor-not-allowed"

@@ -12,6 +12,7 @@ export const Media: CollectionConfig = {
   },
   admin: {
     group: 'Wydarzenia',
+    disableDuplicate: true,
     components: {
       views: {
         list: {

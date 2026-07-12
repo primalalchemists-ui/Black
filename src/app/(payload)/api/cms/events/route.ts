@@ -12,7 +12,6 @@ export async function GET() {
     where: {
       and: [
         { published: { equals: true } },
-        { registrationsEnabled: { equals: true } },
         { status: { equals: "planned" } },
       ],
     },

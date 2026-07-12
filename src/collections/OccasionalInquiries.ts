@@ -29,6 +29,7 @@ export const OccasionalInquiries: CollectionConfig = {
   admin: {
     group: "Obsługa",
     useAsTitle: "name",
+    disableDuplicate: true,
     defaultColumns: ["type", "date", "startsAt", "status"],
     components: {
       views: {

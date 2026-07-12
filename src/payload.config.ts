@@ -1,6 +1,7 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { s3Storage } from '@payloadcms/storage-s3'
+import { pl } from '@payloadcms/translations/languages/pl'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
@@ -69,25 +70,13 @@ export default buildConfig({
   },
 
   i18n: {
-    fallbackLanguage: 'en',
+    supportedLanguages: { pl },
+    fallbackLanguage: 'pl',
     translations: {
-      en: {
+      pl: {
         general: {
           createNew: 'Dodaj nowy',
           noResults: 'Brak wyników',
-          filters: 'Filtry',
-          columns: 'Kolumny',
-          searchBy: 'Szukaj',
-          save: 'Zapisz',
-          cancel: 'Anuluj',
-          delete: 'Usuń',
-          edit: 'Edytuj',
-          createdAt: 'Utworzono',
-          updatedAt: 'Zaktualizowano',
-        },
-        authentication: {
-          login: 'Zaloguj się',
-          forgotPasswordQuestion: 'Nie pamiętasz hasła?',
         },
       },
     },

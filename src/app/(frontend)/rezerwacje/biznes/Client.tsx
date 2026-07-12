@@ -36,6 +36,7 @@ type EventItem = {
   pricePLN: number | null;
   capacityLabel: string | null;
   takenSeats: number | null;
+  registrationsEnabled: boolean | null;
 };
 
 function mapBusinessEventToItem(e: CmsEvent): EventItem {
@@ -49,6 +50,7 @@ function mapBusinessEventToItem(e: CmsEvent): EventItem {
     pricePLN: typeof e.pricePLN === "number" ? e.pricePLN : null,
     capacityLabel: typeof e.capacity === "number" ? String(e.capacity) : null,
     takenSeats: typeof e.takenSeats === "number" ? e.takenSeats : null,
+    registrationsEnabled: typeof e.registrationsEnabled === "boolean" ? e.registrationsEnabled : null,
   };
 }
 
@@ -79,6 +81,7 @@ export default function RezerwacjeBiznesPage() {
     return Math.max(0, capacityNum - taken);
   }, [capacityNum, event]);
   const isSoldOut = spotsLeft !== null && spotsLeft <= 0;
+  const registrationsClosed = event?.registrationsEnabled === false;
 
   const form = useForm<BusinessRequest>({
     resolver: zodResolver(businessRequestSchema),
@@ -311,14 +314,14 @@ export default function RezerwacjeBiznesPage() {
                   <Button
                     type="button"
                     className="bg-black text-white hover:bg-black/90"
-                    disabled={!eventId || isSoldOut}
+                    disabled={!eventId || isSoldOut || registrationsClosed}
                     onClick={() => {
-                      if (!eventId || isSoldOut) return;
+                      if (!eventId || isSoldOut || registrationsClosed) return;
                       form.setValue("eventId", eventId, { shouldValidate: true });
                       setStep(2);
                     }}
                   >
-                    {isSoldOut ? "Koniec miejsc" : "Podaj dane"}
+                    {registrationsClosed ? "Zapisy zamknięte" : isSoldOut ? "Koniec miejsc" : "Podaj dane"}
                   </Button>
                 </>
               )}

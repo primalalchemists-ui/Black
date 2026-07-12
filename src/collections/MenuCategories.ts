@@ -10,6 +10,7 @@ export const MenuCategories: CollectionConfig = {
   admin: {
     group: 'Restauracja',
     useAsTitle: 'name',
+    disableDuplicate: true,
     components: {
       views: {
         list: {

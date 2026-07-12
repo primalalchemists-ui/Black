@@ -21,7 +21,7 @@ import {
 import { registerTransaction } from "@/lib/p24";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
-import { getBlockingEvent } from "@/lib/openingHours";
+import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -103,9 +103,10 @@ export async function GET(req: Request) {
     });
   }
 
-  // Lokal zablokowany przez wydarzenie
-  const blockCheck = await getBlockingEvent(date);
-  if (blockCheck.blocked) {
+  // Pobierz wydarzenia blokujące lokal (całodniowe blokują od razu, częściowe — per-slot)
+  const venueBlockingEvents = await getBlockingEventsForDay(date);
+  const wholeDayBlocked = venueBlockingEvents.some((e: any) => e.allDay || e.blockAllDay);
+  if (wholeDayBlocked) {
     return NextResponse.json({
       ok: true,
       enabled: false,
@@ -204,6 +205,7 @@ export async function GET(req: Request) {
   function statusForSlot(args: { slotStart: Date; slotEnd: Date; resourceId: string; slotHour: number; slotMinute: number }): CellStatus {
     if (!enabled) return "blocked";
     if (!isSlotBookableWithLeadTime(date, args.slotHour, args.slotMinute, 15)) return "blocked";
+    if (isSlotBlockedByVenueEvent(venueBlockingEvents, args.slotHour, args.slotMinute)) return "blocked";
 
     const blocked = (bRes.docs || []).some((b: any) => {
       const ids = relIds(b.resources);
@@ -706,7 +708,14 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, reservationId: reservationDoc.id });
 
   } catch (e: any) {
-    console.error("[bilard] POST nieoczekiwany błąd:", e?.message ?? e)
+    const msg: string = e?.message ?? String(e)
+    if (msg.includes("zarezerwowany w tym czasie") || msg.startsWith("Kolizja")) {
+      return NextResponse.json(
+        { error: "NO_AVAILABILITY", message: "Wybrany stół jest już zajęty w tym terminie. Odśwież stronę i wybierz inny czas." },
+        { status: 409 }
+      )
+    }
+    console.error("[bilard] POST nieoczekiwany błąd:", msg)
     return NextResponse.json(
       { error: "INTERNAL_ERROR", message: CONTACT_MSG },
       { status: 500 }

@@ -3,7 +3,7 @@ import { getPayload } from "payload";
 import config from "@payload-config";
 import { reservationCreateRequestSchema } from "@/lib/validation/reservations";
 import { getNowInWarsaw, isSlotBookableWithLeadTime, getNextReservationNumber } from "../_shared";
-import { getBlockingEvent } from "@/lib/openingHours";
+import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 import { getMailClient, getMailFrom, getOwnerTo, effectiveTo } from "@/lib/mail";
 import { stolikClientText, stolikOwnerText, stolikClientHtml, stolikOwnerHtml } from "@/lib/mailTemplates";
 
@@ -181,9 +181,10 @@ export async function GET(req: Request) {
     }
   }
 
-  // Lokal zablokowany przez wydarzenie
-  const blockCheck = await getBlockingEvent(date);
-  if (blockCheck.blocked) {
+  // Pobierz wydarzenia blokujące lokal (całodniowe blokują od razu, częściowe — per-slot)
+  const venueBlockingEvents = await getBlockingEventsForDay(date);
+  const wholeDayBlocked = venueBlockingEvents.some((e: any) => e.allDay || e.blockAllDay);
+  if (wholeDayBlocked) {
     return NextResponse.json({
       ok: true,
       enabled: false,
@@ -241,7 +242,8 @@ export async function GET(req: Request) {
     const canBook =
       isSlotBookableWithLeadTime(date, slotHour, slotMinute, 15) &&
       remaining >= partySize &&
-      onlineSeatsLimit > 0;
+      onlineSeatsLimit > 0 &&
+      !isSlotBlockedByVenueEvent(venueBlockingEvents, slotHour, slotMinute);
 
     out.push({ time, remaining, canBook });
   }

@@ -30,6 +30,7 @@ export const Events: CollectionConfig = {
   admin: {
     group: 'Wydarzenia',
     useAsTitle: 'title',
+    disableDuplicate: true,
     defaultColumns: ['title', 'startsAt', 'kind', 'status'],
     components: {
       views: {

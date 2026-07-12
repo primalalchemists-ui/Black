@@ -24,6 +24,7 @@ export const Blackouts: CollectionConfig = {
   admin: {
     group: "Obsługa",
     useAsTitle: "title",
+    disableDuplicate: true,
     defaultColumns: ["service", "day", "allDay", "startHour", "startMinute", "endHour", "endMinute", "active"],
     components: {
       views: {

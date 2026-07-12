@@ -25,6 +25,7 @@ export const Payments: CollectionConfig = {
   labels: { singular: 'Płatność', plural: 'Płatności' },
   admin: {
     group: 'Obsługa',
+    disableDuplicate: true,
     defaultColumns: ['provider', 'status', 'amount', 'createdAt'],
     components: {
       views: {
