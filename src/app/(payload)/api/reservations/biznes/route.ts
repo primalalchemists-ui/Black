@@ -222,6 +222,24 @@ export async function POST(req: Request) {
             email: data.email,
           })
 
+          // P24 OK — utwórz rekord płatności (non-fatal)
+          try {
+            await payload.create({
+              collection: "payments",
+              overrideAccess: true,
+              data: {
+                provider: "p24",
+                status: "pending",
+                amount: amountGrosze / 100,
+                currency: "PLN",
+                p24SessionId: groupId,
+                reservation: reservationDoc.id,
+              } as any,
+            })
+          } catch (payErr) {
+            console.error("[biznes] payment record create failed (non-fatal):", payErr)
+          }
+
           console.log(`[biznes] P24 payUrl=${p24Result.payUrl} groupId=${groupId}`)
           return NextResponse.json({ ok: true, redirectUrl: p24Result.payUrl, groupId, reservationNumber })
         } catch (p24Err: any) {

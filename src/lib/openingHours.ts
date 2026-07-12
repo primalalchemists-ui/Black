@@ -119,9 +119,10 @@ export function isSlotBlockedByVenueEvent(events: any[], slotHour: number, slotM
   for (const event of events) {
     if (event.allDay || event.blockAllDay) return true
     const eventStartMins = (Number(event.startHour) || 0) * 60 + (Number(event.startMinute) || 0)
-    const eventEndMins = event.endHour != null
+    let eventEndMins = event.endHour != null
       ? Number(event.endHour) * 60 + (Number(event.endMinute) || 0)
       : 24 * 60
+    if (eventEndMins <= eventStartMins) eventEndMins += 24 * 60
     const slotMins = slotHour * 60 + slotMinute
     if (slotMins >= eventStartMins && slotMins < eventEndMins) return true
   }
@@ -149,9 +150,10 @@ export async function getBlockingEvent(
 
       if (checkHour !== undefined) {
         const eventStart = (Number(event.startHour) || 0) * 60 + (Number(event.startMinute) || 0)
-        const eventEnd = event.endHour != null
+        let eventEnd = event.endHour != null
           ? Number(event.endHour) * 60 + (Number(event.endMinute) || 0)
           : 24 * 60
+        if (eventEnd <= eventStart) eventEnd += 24 * 60
         const checkMins = checkHour * 60 + (checkMinute ?? 0)
         if (checkMins >= eventStart && checkMins < eventEnd) {
           return { blocked: true, eventTitle: event.title }

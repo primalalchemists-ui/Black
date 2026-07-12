@@ -38,6 +38,15 @@ export async function confirmGroupPayment(
     return "already_paid"
   }
 
+  // Szukaj rekordu płatności po p24SessionId (może nie istnieć przy starych rezerwacjach)
+  const paymentResult = await payload.find({
+    collection: "payments",
+    limit: 1,
+    overrideAccess: true,
+    where: { p24SessionId: { equals: sessionId } },
+  })
+  const paymentDoc: any = (paymentResult.docs as any[])[0] ?? null
+
   if (!opts?.skipP24Verify) {
     let verified = false
     try {
@@ -57,6 +66,11 @@ export async function confirmGroupPayment(
         await payload
           .update({ collection: "reservations", id: doc.id, data: { paymentStatus: "failed" } as any, overrideAccess: true })
           .catch((err) => console.error("[confirmGroupPayment] Update failed:", err))
+      }
+      if (paymentDoc) {
+        await payload
+          .update({ collection: "payments", id: paymentDoc.id, data: { status: "failed" } as any, overrideAccess: true })
+          .catch((e) => console.error("[confirmGroupPayment] payment update (failed) error:", e))
       }
       return "verify_failed"
     }
@@ -122,6 +136,16 @@ export async function confirmGroupPayment(
         })
         .catch((err) => console.error("[confirmGroupPayment] Update (manual review) failed:", err))
     }
+    if (paymentDoc) {
+      await payload
+        .update({
+          collection: "payments",
+          id: paymentDoc.id,
+          data: { status: "paid", p24OrderId: String(opts?.orderId ?? "") } as any,
+          overrideAccess: true,
+        })
+        .catch((e) => console.error("[confirmGroupPayment] payment update (manual review) error:", e))
+    }
     console.error(
       `[confirmGroupPayment] Rezerwacja NIE potwierdzona automatycznie — wymagana ręczna weryfikacja. sessionId=${sessionId}`,
     )
@@ -137,6 +161,17 @@ export async function confirmGroupPayment(
         overrideAccess: true,
       })
       .catch((err) => console.error("[confirmGroupPayment] Update failed:", err))
+  }
+
+  if (paymentDoc) {
+    await payload
+      .update({
+        collection: "payments",
+        id: paymentDoc.id,
+        data: { status: "paid", p24OrderId: String(opts?.orderId ?? "") } as any,
+        overrideAccess: true,
+      })
+      .catch((e) => console.error("[confirmGroupPayment] payment update error:", e))
   }
 
   console.log(`[confirmGroupPayment] Oznaczono jako opłacone. sessionId=${sessionId} docs=${docs.length}`)

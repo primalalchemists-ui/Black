@@ -21,7 +21,7 @@ import {
 import { registerTransaction } from "@/lib/p24";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
-import { getBlockingEvent, getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
+import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -336,16 +336,28 @@ export async function POST(req: Request) {
     );
   }
 
-  if (typeof data?.date === "string") {
-    const startH = typeof data?.startHour === "number" ? data.startHour : undefined
-    const blockCheck = await getBlockingEvent(data.date, startH != null ? Math.trunc(startH) : undefined)
-    if (blockCheck.blocked) {
-      return NextResponse.json(
-        { error: "VENUE_BLOCKED", message: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie." },
-        { status: 409 }
-      )
-    }
+  // Walidacja godzin otwarcia + dzień nieczynny
+  const openingHours = await getOpeningHours(payload)
+  if (openingHours.length > 0 && isDayClosed(data.date, openingHours)) {
+    return NextResponse.json(
+      { error: "CLOSED", message: "Brak możliwości rezerwacji — lokal nieczynny." },
+      { status: 409 }
+    )
   }
+
+  // Eventy blokujące lokal — całodniowe odrzucamy od razu; per-slot sprawdzamy w Pass 1
+  const venueBlockingEvents = await getBlockingEventsForDay(data.date)
+  const wholeDayBlocked = venueBlockingEvents.some((e: any) => e.allDay || e.blockAllDay)
+  if (wholeDayBlocked) {
+    return NextResponse.json(
+      { error: "VENUE_BLOCKED", message: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie." },
+      { status: 409 }
+    )
+  }
+
+  const oc = openingHours.length ? getOpenCloseForDay({ date: data.date, openingHours }) : null
+  const reservationStartAfterOpeningMinutes = Number(s?.reservationStartAfterOpeningMinutes ?? 0)
+  const latestReservationStartBeforeClosingMinutes = Number(s?.latestReservationStartBeforeClosingMinutes ?? 60)
 
   const rType = resourceTypeForReservation("kregle");
   const service = mapServiceForBlackout("kregle");
@@ -459,6 +471,27 @@ export async function POST(req: Request) {
           { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: "Nie można rezerwować godzin, które już minęły lub zaczynają się za mniej niż 15 minut." }] },
           { status: 409 }
         );
+      }
+
+      // Godziny otwarcia per segment
+      if (oc) {
+        const segStart = toDateAtHour(data.date, startHour)
+        const earliestStart = addMinutes(oc.openAt, reservationStartAfterOpeningMinutes)
+        const latestStart = addMinutes(oc.closeAt, -latestReservationStartBeforeClosingMinutes)
+        if (segStart < earliestStart || segStart > latestStart) {
+          return NextResponse.json(
+            { error: "OUT_OF_HOURS", message: "Wybrany czas jest poza godzinami dostępności." },
+            { status: 409 }
+          )
+        }
+      }
+
+      // blocksVenue per segment (obsługuje endHour=0 = północ)
+      if (isSlotBlockedByVenueEvent(venueBlockingEvents, Math.floor(startHour), Math.round((startHour % 1) * 60))) {
+        return NextResponse.json(
+          { error: "VENUE_BLOCKED", message: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie." },
+          { status: 409 }
+        )
       }
 
       const resourceId = numToId.get(resourceNumber)!;
@@ -659,6 +692,23 @@ export async function POST(req: Request) {
             }).catch((e) => console.error("[kregle] rollback update also failed:", e));
           }
           return NextResponse.json({ error: "PAYMENT_ERROR", message: CONTACT_MSG }, { status: 502 });
+        }
+        // P24 OK — utwórz rekord płatności (non-fatal: callback zadziała nawet bez tego rekordu)
+        try {
+          await payload.create({
+            collection: "payments",
+            overrideAccess: true,
+            data: {
+              provider: "p24",
+              status: "pending",
+              amount: amountToPay,
+              currency: "PLN",
+              p24SessionId: groupId,
+              reservation: createdDoc.id,
+            } as any,
+          });
+        } catch (payErr) {
+          console.error("[kregle] payment record create failed (non-fatal):", payErr);
         }
       }
 

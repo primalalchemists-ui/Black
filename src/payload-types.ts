@@ -154,6 +154,10 @@ export interface Reservation {
     email?: string | null;
   };
   notes?: string | null;
+  /**
+   * Widoczna tylko dla obsługi. Wypełniana automatycznie przy problemach z płatnością.
+   */
+  internalNote?: string | null;
   day: string;
   allDay?: boolean | null;
   startHour?:
@@ -733,6 +737,7 @@ export interface ReservationsSelect<T extends boolean = true> {
         email?: T;
       };
   notes?: T;
+  internalNote?: T;
   day?: T;
   allDay?: T;
   startHour?: T;

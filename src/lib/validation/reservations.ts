@@ -25,33 +25,29 @@ export const customerSchema = z.object({
   notes: z.string().trim().max(1000, "Za długie uwagi").optional().or(z.literal("")),
 });
 
-export const invoiceSchema = z
-  .object({
-    wantInvoice: z.boolean().default(false),
-    invoiceType: z.enum(["", "personal", "company"]).default(""),
-    nip: z.string().trim().optional().or(z.literal("")),
-  })
-  .superRefine((val, ctx) => {
-    if (val.wantInvoice) {
-      if (!val.invoiceType) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["invoiceType"],
-          message: "Wybierz rodzaj faktury",
-        });
-      }
-      if (val.invoiceType === "company") {
-        const res = nipPL.safeParse(val.nip ?? "");
-        if (!res.success) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["nip"],
-            message: "Podaj poprawny NIP (10 cyfr)",
-          });
-        }
-      }
+// Tylko shape — superRefine jest dodawany na każdym request schema osobno,
+// bo Zod .merge() ciche gubi .superRefine() ze schematu źródłowego.
+export const invoiceSchema = z.object({
+  wantInvoice: z.boolean().default(false),
+  invoiceType: z.enum(["", "personal", "company"]).default(""),
+  nip: z.string().trim().optional().or(z.literal("")),
+});
+
+function applyInvoiceRules(
+  val: { wantInvoice?: boolean; invoiceType?: string; nip?: string },
+  ctx: z.RefinementCtx,
+) {
+  if (!val.wantInvoice) return;
+  if (!val.invoiceType) {
+    ctx.addIssue({ code: "custom", path: ["invoiceType"], message: "Wybierz rodzaj faktury" });
+  }
+  if (val.invoiceType === "company") {
+    const res = nipPL.safeParse(val.nip ?? "");
+    if (!res.success) {
+      ctx.addIssue({ code: "custom", path: ["nip"], message: "Podaj NIP firmy." });
     }
-  });
+  }
+}
 
 // export const acceptRulesSchema = z.object({
 //   acceptRules: z.boolean().refine((v) => v === true, {
@@ -154,7 +150,8 @@ export const billiardsRequestSchema = z
   .merge(gridSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptDocumentsSchema);
+  .merge(acceptDocumentsSchema)
+  .superRefine(applyInvoiceRules);
 
 export type BilliardsRequest = z.infer<typeof billiardsRequestSchema>;
 
@@ -163,7 +160,8 @@ export const bowlingRequestSchema = z
   .merge(gridSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptDocumentsSchema);
+  .merge(acceptDocumentsSchema)
+  .superRefine(applyInvoiceRules);
 
 export type BowlingRequest = z.infer<typeof bowlingRequestSchema>;
 
@@ -172,7 +170,8 @@ export const tablesRequestSchema = z
   .merge(tablesSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptDocumentsSchema);
+  .merge(acceptDocumentsSchema)
+  .superRefine(applyInvoiceRules);
 
 export type TablesRequest = z.infer<typeof tablesRequestSchema>;
 
@@ -181,7 +180,8 @@ export const businessRequestSchema = z
   .merge(businessSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptDocumentsSchema);
+  .merge(acceptDocumentsSchema)
+  .superRefine(applyInvoiceRules);
 
 export type BusinessRequest = z.infer<typeof businessRequestSchema>;
 
@@ -190,7 +190,8 @@ export const imprezaRequestSchema = z
   .merge(imprezaSchema)
   .merge(customerSchema)
   .merge(invoiceSchema)
-  .merge(acceptDocumentsSchema);
+  .merge(acceptDocumentsSchema)
+  .superRefine(applyInvoiceRules);
 
 export type ImprezaRequest = z.infer<typeof imprezaRequestSchema>;
 
