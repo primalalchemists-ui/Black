@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 const isAdmin = ({ req }: any) => req.user?.role === 'admin'
+const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
 
 export const Resources: CollectionConfig = {
   slug: 'resources',
