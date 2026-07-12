@@ -222,31 +222,6 @@ export async function POST(req: Request) {
             email: data.email,
           })
 
-          // Zwolnij advisory lock PRZED payload.create(payments).
-          // Hook afterChange Payments → update(reservations) → beforeChange Reservations
-          // wymaga osobnego połączenia DB; trzymanie lockClient wyczerpuje pulę → deadlock.
-          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
-          lockClient.release()
-          lockClient = null // finally { if (lockClient) } nie zwolni ponownie
-
-          // P24 OK — utwórz rekord płatności (non-fatal)
-          try {
-            await payload.create({
-              collection: "payments",
-              overrideAccess: true,
-              data: {
-                provider: "p24",
-                status: "pending",
-                amount: amountGrosze / 100,
-                currency: "PLN",
-                p24SessionId: groupId,
-                reservation: reservationDoc.id,
-              } as any,
-            })
-          } catch (payErr) {
-            console.error("[biznes] payment record create failed (non-fatal):", payErr)
-          }
-
           console.log(`[biznes] P24 payUrl=${p24Result.payUrl} groupId=${groupId}`)
           return NextResponse.json({ ok: true, redirectUrl: p24Result.payUrl, groupId, reservationNumber })
         } catch (p24Err: any) {

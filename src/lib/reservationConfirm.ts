@@ -145,6 +145,23 @@ export async function confirmGroupPayment(
           overrideAccess: true,
         })
         .catch((e) => console.error("[confirmGroupPayment] payment update (manual review) error:", e))
+    } else {
+      const totalPLN = docs.reduce((acc, doc) => acc + Number(doc.depositAmount ?? 0), 0)
+      await payload
+        .create({
+          collection: "payments",
+          overrideAccess: true,
+          data: {
+            provider: "p24",
+            status: "paid",
+            amount: opts?.amount ? opts.amount / 100 : totalPLN,
+            currency: "PLN",
+            p24SessionId: sessionId,
+            p24OrderId: String(opts?.orderId ?? ""),
+            reservation: docs[0].id,
+          } as any,
+        })
+        .catch((e) => console.error("[confirmGroupPayment] payment create (manual review) error:", e))
     }
     console.error(
       `[confirmGroupPayment] Rezerwacja NIE potwierdzona automatycznie — wymagana ręczna weryfikacja. sessionId=${sessionId}`,
@@ -172,6 +189,23 @@ export async function confirmGroupPayment(
         overrideAccess: true,
       })
       .catch((e) => console.error("[confirmGroupPayment] payment update error:", e))
+  } else {
+    const totalPLN = docs.reduce((acc, doc) => acc + Number(doc.depositAmount ?? 0), 0)
+    await payload
+      .create({
+        collection: "payments",
+        overrideAccess: true,
+        data: {
+          provider: "p24",
+          status: "paid",
+          amount: opts?.amount ? opts.amount / 100 : totalPLN,
+          currency: "PLN",
+          p24SessionId: sessionId,
+          p24OrderId: String(opts?.orderId ?? ""),
+          reservation: docs[0].id,
+        } as any,
+      })
+      .catch((e) => console.error("[confirmGroupPayment] payment create error:", e))
   }
 
   console.log(`[confirmGroupPayment] Oznaczono jako opłacone. sessionId=${sessionId} docs=${docs.length}`)

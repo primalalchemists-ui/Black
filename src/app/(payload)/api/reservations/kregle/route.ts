@@ -693,32 +693,6 @@ export async function POST(req: Request) {
           }
           return NextResponse.json({ error: "PAYMENT_ERROR", message: CONTACT_MSG }, { status: 502 });
         }
-        // Zwolnij advisory lock PRZED payload.create(payments).
-        // Hook afterChange Payments → update(reservations) → beforeChange Reservations
-        // wymaga osobnego połączenia DB; trzymanie lockClient wyczerpuje pulę → deadlock.
-        for (const k of acquiredLockKeys) {
-          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [k]).catch(() => {});
-        }
-        lockClient.release();
-        lockClient = null; // finally { if (lockClient) } nie zwolni ponownie
-
-        // P24 OK — utwórz rekord płatności (non-fatal)
-        try {
-          await payload.create({
-            collection: "payments",
-            overrideAccess: true,
-            data: {
-              provider: "p24",
-              status: "pending",
-              amount: amountToPay,
-              currency: "PLN",
-              p24SessionId: groupId,
-              reservation: createdDoc.id,
-            } as any,
-          });
-        } catch (payErr) {
-          console.error("[kregle] payment record create failed (non-fatal):", payErr);
-        }
       }
 
       console.log(`[kregle] reservation=${createdDoc.id} p24PayUrl=${p24PayUrl} groupId=${groupId}`);
