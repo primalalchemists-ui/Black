@@ -8,6 +8,13 @@ export const Media: CollectionConfig = {
   },
   admin: {
     group: 'Wydarzenia',
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/MediaListView#MediaListView',
+        },
+      },
+    },
   },
   access: {
     read: () => true,

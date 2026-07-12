@@ -10,6 +10,13 @@ export const MenuCategories: CollectionConfig = {
   admin: {
     group: 'Restauracja',
     useAsTitle: 'name',
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/MenuCategoriesListView#MenuCategoriesListView',
+        },
+      },
+    },
   },
   access: {
     read: () => true,

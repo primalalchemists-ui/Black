@@ -25,6 +25,13 @@ export const Payments: CollectionConfig = {
   admin: {
     group: 'Obsługa',
     defaultColumns: ['provider', 'status', 'amount', 'createdAt'],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/PaymentsListView#PaymentsListView',
+        },
+      },
+    },
   },
   access: {
     read: isStaffOrAdmin,

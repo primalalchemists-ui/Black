@@ -13,6 +13,13 @@ export const Users: CollectionConfig = {
   admin: {
     group: 'Administracja',
     useAsTitle: 'email',
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/UsersListView#UsersListView',
+        },
+      },
+    },
   },
   fields: [
     {

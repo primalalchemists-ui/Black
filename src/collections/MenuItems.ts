@@ -11,6 +11,13 @@ export const MenuItems: CollectionConfig = {
     group: 'Restauracja',
     useAsTitle: 'name',
     defaultColumns: ['name', 'category', 'price', 'active'],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/MenuItemsListView#MenuItemsListView',
+        },
+      },
+    },
   },
   access: {
     read: () => true,

@@ -5,7 +5,17 @@ const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.r
 export const Resources: CollectionConfig = {
   slug: 'resources',
   labels: { singular: 'Zasób', plural: 'Zasoby' },
-  admin: { group: 'Ustawienia', useAsTitle: 'label' },
+  admin: {
+    group: 'Ustawienia',
+    useAsTitle: 'label',
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/ResourcesListView#ResourcesListView',
+        },
+      },
+    },
+  },
   access: {
     read: isStaffOrAdmin,
     create: isStaffOrAdmin,
