@@ -379,26 +379,25 @@ export function ResourceGrid({
             </div>
           </div>
 
-          <div className="rounded-lg border p-4 mt-8 min-h-[5rem]">
+          <div className="rounded-lg border p-4 mt-8">
             <div className="text-sm text-muted-foreground">Wybrano</div>
-
-            {!segments.length ? (
-              <div className="font-medium">—</div>
-            ) : (
-              <div className="grid gap-1">
-                <div className="font-medium">
-                  {resourceLabel}:{" "}
-                  {segments
-                    .slice()
-                    .sort((a, b) => a.resource - b.resource)
-                    .map((s) => `${s.resource} • ${formatHHMMFromFloat(s.startHour)}–${formatHHMMFromFloat(s.endHour + slotMinutes / 60)}`)
-                    .join(" | ")}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Czas: {totalHours} h • {type === "bilard" ? "Wybrane stoły" : type === "kregle" ? "Wybrane tory" : "Zasoby"}: {segments.length} • Cena: {formatPLN(totalPrice)}
-                </div>
+            <div className="grid gap-1 mt-0.5">
+              <div className="font-medium">
+                {segments.length ? (
+                  <>
+                    {resourceLabel}:{" "}
+                    {segments
+                      .slice()
+                      .sort((a, b) => a.resource - b.resource)
+                      .map((s) => `${s.resource} • ${formatHHMMFromFloat(s.startHour)}–${formatHHMMFromFloat(s.endHour + slotMinutes / 60)}`)
+                      .join(" | ")}
+                  </>
+                ) : "—"}
               </div>
-            )}
+              <div className={`text-sm text-muted-foreground${segments.length ? "" : " invisible"}`}>
+                Czas: {totalHours} h • {type === "bilard" ? "Wybrane stoły" : type === "kregle" ? "Wybrane tory" : "Zasoby"}: {segments.length || 0} • Cena: {formatPLN(totalPrice)}
+              </div>
+            </div>
 
             <input type="hidden" name="startHour" value={legacyStartHour == null ? "" : String(legacyStartHour)} />
             <input type="hidden" name="endHour" value={legacyEndHour == null ? "" : String(legacyEndHour)} />

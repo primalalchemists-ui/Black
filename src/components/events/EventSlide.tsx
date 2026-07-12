@@ -83,9 +83,11 @@ export function EventSlide({
 
           {e.description?.trim() && (
             <div className="relative z-20">
-              <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground ${descExpanded ? "max-h-[5.75rem] overflow-y-auto pr-1" : "line-clamp-4"}`}>
-                {e.description}
-              </p>
+              <div className="h-[5.75rem] overflow-y-auto [scrollbar-gutter:stable]">
+                <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground${descExpanded ? "" : " line-clamp-4"}`}>
+                  {e.description}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); setDescExpanded((x) => !x); }}
