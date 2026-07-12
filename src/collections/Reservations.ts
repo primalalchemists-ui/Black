@@ -98,7 +98,7 @@ export const Reservations: CollectionConfig = {
 
   hooks: {
     beforeValidate: [
-      ({ data }) => {
+      ({ data, req }) => {
         const type = data?.type as ReservationType | undefined;
         if (!data || !type) return data;
 
@@ -160,6 +160,40 @@ export const Reservations: CollectionConfig = {
               (data as any).endsAt = endD.toISOString();
             } else {
               (data as any).endsAt = undefined;
+            }
+          }
+        }
+
+        // ===== AUTO-GENERACJA SEGMENTÓW Z PANELU ADMINA =====
+        // Dla rezerwacji przez panel (req.user istnieje) generujemy segments z resources + czasu.
+        // Dla rezerwacji online (brak req.user w hooku) segments przychodzą gotowe z route.
+        if (req?.user && (type === "kregle" || type === "bilard")) {
+          const rawResources = (data as any).resources;
+          const resources = Array.isArray(rawResources)
+            ? (rawResources as any[]).map((x: any) => {
+                if (!x) return null;
+                if (typeof x === "string" || typeof x === "number") return String(x);
+                if (x?.id != null) return String(x.id);
+                if (x?.value != null) return String(x.value);
+                return null;
+              }).filter(Boolean) as string[]
+            : [];
+
+          if (resources.length > 0) {
+            const sH = Number((data as any).startHour ?? 0);
+            const sM = Number((data as any).startMinute ?? 0);
+            const eH = Number((data as any).endHour ?? 0);
+            const eM = Number((data as any).endMinute ?? 0);
+
+            if (Number.isFinite(sH) && Number.isFinite(eH)) {
+              (data as any).segments = resources.map((resourceId: string) => ({
+                resource: resourceId,
+                startHour: sH,
+                startMinute: sM,
+                endHour: eH,
+                endMinute: eM,
+                price: 0,
+              }));
             }
           }
         }
@@ -383,7 +417,19 @@ export const Reservations: CollectionConfig = {
       },
     },
 
-    // Kręgle/Bilard – zasoby (z filtrem)
+    // Kręgle/Bilard – picker zasobów (custom UI)
+    {
+      name: "resourcePicker",
+      type: "ui",
+      admin: {
+        condition: (data) => data?.type === "kregle" || data?.type === "bilard",
+        components: {
+          Field: "@/components/admin/BowlingResourcePicker#BowlingResourcePicker",
+        },
+      },
+    },
+
+    // Kręgle/Bilard – zasoby (tory / stoły) — zarządzane przez picker powyżej
     {
       name: "resources",
       label: "Zasoby (tory / stoły)",
@@ -391,7 +437,7 @@ export const Reservations: CollectionConfig = {
       relationTo: "resources",
       hasMany: true,
       admin: {
-        condition: (_, s) => s?.type === "kregle" || s?.type === "bilard",
+        hidden: true,
       },
       filterOptions: ({ siblingData }) => {
         const t = siblingData?.type as ReservationType | undefined;
@@ -412,14 +458,13 @@ export const Reservations: CollectionConfig = {
       },
     },
 
-    // Segmenty per zasób (kregle/bilard) — generowane automatycznie
+    // Segmenty per zasób (kregle/bilard) — auto-generowane, ukryte w panelu
     {
       name: "segments",
       label: "Tory / Stoły",
       type: "array",
       admin: {
-        condition: (_, s) => s?.type === "kregle" || s?.type === "bilard",
-        description: "Szczegóły czasowe per zasób — generowane automatycznie przy rezerwacji online",
+        hidden: true,
       },
       fields: [
         {
@@ -427,6 +472,8 @@ export const Reservations: CollectionConfig = {
           label: "Zasób",
           type: "relationship",
           relationTo: "resources",
+          // Pomijamy walidację Payload (brak overrideAccess w route → błąd 500)
+          validate: () => true,
         },
         {
           name: "startHour",

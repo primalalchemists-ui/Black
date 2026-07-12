@@ -109,6 +109,74 @@
 }
 
 
+// ─── Bowling / Billiard Resource Picker ──────────────────────────────────────
+
+.brp {
+  margin-bottom: 1.25rem;
+
+  &__heading {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--theme-text);
+    opacity: 0.5;
+    margin: 0 0 0.5rem;
+  }
+
+  &__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--theme-border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--theme-text);
+    background: var(--theme-elevation-0);
+    transition: all 0.1s;
+    -webkit-user-select: none;
+    user-select: none;
+
+    &:hover {
+      border-color: var(--theme-text);
+      opacity: 0.8;
+    }
+
+    &--on {
+      background: var(--theme-text);
+      color: var(--theme-bg);
+      border-color: var(--theme-text);
+    }
+  }
+
+  &__check {
+    display: none;
+  }
+
+  &__hint {
+    font-size: 0.85rem;
+    color: var(--theme-text);
+    opacity: 0.45;
+    margin: 0;
+  }
+
+  &__summary {
+    margin-top: 0.45rem;
+    font-size: 0.8rem;
+    color: var(--theme-text);
+    opacity: 0.5;
+  }
+}
+
+
 // ─── Custom List View — Reservations ─────────────────────────────────────────
 
 .black-admin-list {
