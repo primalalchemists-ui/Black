@@ -367,7 +367,7 @@ export const Reservations: CollectionConfig = {
       required: true,
       options: hourOptions,
       defaultValue: "18",
-      admin: { condition: (_, s) => !s?.allDay },
+      admin: { condition: (_, s) => !s?.allDay && s?.type !== "kregle" && s?.type !== "bilard" },
     },
     {
       name: "startMinute",
@@ -385,7 +385,7 @@ export const Reservations: CollectionConfig = {
       type: "select",
       required: false,
       options: hourOptions,
-      admin: { condition: (_, s) => !s?.allDay },
+      admin: { condition: (_, s) => !s?.allDay && s?.type !== "kregle" && s?.type !== "bilard" },
     },
     {
       name: "endMinute",

@@ -267,7 +267,7 @@ export default function RezerwacjeBilardPage() {
             />
 
             {gridReady ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   className="bg-primary text-primary-foreground hover:bg-primary/90"

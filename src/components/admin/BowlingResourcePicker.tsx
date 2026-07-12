@@ -1,64 +1,30 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
-import { useFormFields, useAuth } from "@payloadcms/ui"
+import { useFormFields, useAuth, useDocumentInfo } from "@payloadcms/ui"
 
 type Resource = { id: string | number; number: number; label?: string | null }
 
 interface ResourceTime {
   startHour: string
-  startMinute: string
   endHour: string
-  endMinute: string
 }
+
+const DEFAULT_TIME: ResourceTime = { startHour: "19", endHour: "21" }
 
 const HOUR_OPTS = Array.from({ length: 24 }, (_, h) => ({
   value: String(h),
   label: `${String(h).padStart(2, "0")}:00`,
 }))
 
-function extractIds(val: unknown): string[] {
-  if (!Array.isArray(val)) return []
-  return (val as unknown[]).flatMap((r) => {
-    if (!r) return []
-    if (typeof r === "string" || typeof r === "number") return [String(r)]
-    if (typeof r === "object") {
-      const o = r as Record<string, unknown>
-      if (o.id != null) return [String(o.id)]
-      if (o.value != null) return [String(o.value)]
-    }
-    return []
-  })
-}
-
-function extractSegmentResource(seg: unknown): string | null {
-  if (!seg || typeof seg !== "object") return null
-  const s = seg as Record<string, unknown>
-  const res = s.resource
-  if (!res) return null
-  if (typeof res === "string" || typeof res === "number") return String(res)
-  if (typeof res === "object") {
-    const r = res as Record<string, unknown>
-    if (r.id != null) return String(r.id)
-    if (r.value != null) return String(r.value)
-  }
-  return null
-}
-
 export function BowlingResourcePicker() {
   const { token } = useAuth()
+  const { id: docId } = useDocumentInfo()
 
-  const [typeVal, resourcesVal, segmentsVal, startHourVal, startMinuteVal, endHourVal, endMinuteVal, dispatch] =
-    useFormFields(([fields, d]) => [
-      fields.type?.value as string | undefined,
-      fields.resources?.value,
-      fields.segments?.value,
-      fields.startHour?.value as string | undefined,
-      fields.startMinute?.value as string | undefined,
-      fields.endHour?.value as string | undefined,
-      fields.endMinute?.value as string | undefined,
-      d,
-    ] as const)
+  const [typeVal, dispatch] = useFormFields(([fields, d]) => [
+    fields.type?.value as string | undefined,
+    d,
+  ] as const)
 
   const resourceType = typeVal === "kregle" ? "lane" : typeVal === "bilard" ? "billiard" : null
 
@@ -67,18 +33,19 @@ export function BowlingResourcePicker() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [times, setTimes] = useState<Map<string, ResourceTime>>(new Map())
 
-  const initRef = useRef(false)
-  const prevTypeRef = useRef(typeVal)
+  // Track current type so we can reset on change
+  const prevTypeRef = useRef<string | undefined>(typeVal)
+  // Track that init already ran for this type+doc combination
+  const initDoneRef = useRef(false)
 
-  // Reset when reservation type changes
+  // Reset state when reservation type changes
   useEffect(() => {
-    if (prevTypeRef.current !== typeVal) {
-      prevTypeRef.current = typeVal
-      initRef.current = false
-      setSelectedIds(new Set())
-      setTimes(new Map())
-      setAllResources([])
-    }
+    if (prevTypeRef.current === typeVal) return
+    prevTypeRef.current = typeVal
+    setSelectedIds(new Set())
+    setTimes(new Map())
+    setAllResources([])
+    initDoneRef.current = false
   }, [typeVal])
 
   // Fetch available resources when type changes
@@ -98,59 +65,70 @@ export function BowlingResourcePicker() {
       .finally(() => setLoading(false))
   }, [resourceType, token])
 
-  // Initialize from form data once resources have loaded.
-  // Reads segmentsVal/resourcesVal at effect run time (initial DB values, before any dispatch).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Initialize state once resources are loaded.
+  // In edit mode: fetch the document from the API to read existing segments.
+  // In create mode: start empty.
   useEffect(() => {
-    if (initRef.current || allResources.length === 0) return
-    initRef.current = true
+    if (allResources.length === 0 || !token || initDoneRef.current) return
+    initDoneRef.current = true
 
-    const defTime: ResourceTime = {
-      startHour: startHourVal ?? "16",
-      startMinute: startMinuteVal ?? "0",
-      endHour: endHourVal ?? "18",
-      endMinute: endMinuteVal ?? "0",
+    if (!docId) {
+      // Create mode — empty state, user selects via toggles
+      return
     }
 
-    const segs = Array.isArray(segmentsVal) ? (segmentsVal as any[]) : []
-    const initTimes = new Map<string, ResourceTime>()
-    const initSelected = new Set<string>()
+    // Edit mode — fetch existing document at depth=0 (IDs only)
+    fetch(`/api/reservations/${docId}?depth=0`, {
+      headers: { Authorization: `JWT ${token}` },
+    })
+      .then((r) => r.json())
+      .then((doc) => {
+        const segs: any[] = Array.isArray(doc.segments) ? doc.segments : []
+        const resources: any[] = Array.isArray(doc.resources) ? doc.resources : []
 
-    if (segs.length > 0) {
-      for (const seg of segs) {
-        const resId = extractSegmentResource(seg)
-        if (!resId) continue
-        initSelected.add(resId)
-        initTimes.set(resId, {
-          startHour: String(seg.startHour ?? defTime.startHour),
-          startMinute: String(seg.startMinute ?? defTime.startMinute),
-          endHour: String(seg.endHour ?? defTime.endHour),
-          endMinute: String(seg.endMinute ?? defTime.endMinute),
-        })
-      }
-    } else {
-      for (const resId of extractIds(resourcesVal)) {
-        initSelected.add(resId)
-        initTimes.set(resId, { ...defTime })
-      }
-    }
+        const newTimes = new Map<string, ResourceTime>()
+        const newSelected = new Set<string>()
 
-    setSelectedIds(initSelected)
-    setTimes(initTimes)
-  }, [allResources]) // intentionally omit form field values — capture only initial DB values
+        if (segs.length > 0) {
+          for (const seg of segs) {
+            const res = seg.resource
+            const resId = res == null ? "" : typeof res === "object" ? String(res.id ?? "") : String(res)
+            if (!resId) continue
+            newSelected.add(resId)
+            newTimes.set(resId, {
+              startHour: String(seg.startHour ?? DEFAULT_TIME.startHour),
+              endHour: String(seg.endHour ?? DEFAULT_TIME.endHour),
+            })
+          }
+        } else {
+          for (const res of resources) {
+            const resId = res == null ? "" : typeof res === "object" ? String(res.id ?? "") : String(res)
+            if (!resId) continue
+            newSelected.add(resId)
+            newTimes.set(resId, { ...DEFAULT_TIME })
+          }
+        }
+
+        setSelectedIds(newSelected)
+        setTimes(newTimes)
+      })
+      .catch(() => {
+        // On error, stay with empty state
+      })
+  }, [allResources, docId, token])
 
   const dispatchBoth = useCallback(
     (nextSelected: Set<string>, nextTimes: Map<string, ResourceTime>) => {
       const arr = [...nextSelected]
       ;(dispatch as any)({ type: "UPDATE", path: "resources", value: arr, valid: arr.length > 0 })
       const segments = arr.map((resId) => {
-        const t = nextTimes.get(resId) ?? { startHour: "16", startMinute: "0", endHour: "18", endMinute: "0" }
+        const t = nextTimes.get(resId) ?? DEFAULT_TIME
         return {
           resource: resId,
           startHour: Number(t.startHour),
-          startMinute: Number(t.startMinute),
+          startMinute: 0,
           endHour: Number(t.endHour),
-          endMinute: Number(t.endMinute),
+          endMinute: 0,
           price: 0,
         }
       })
@@ -169,25 +147,20 @@ export function BowlingResourcePicker() {
         next.add(id)
         if (!times.has(id)) {
           nextTimes = new Map(times)
-          nextTimes.set(id, {
-            startHour: String(startHourVal ?? "16"),
-            startMinute: String(startMinuteVal ?? "0"),
-            endHour: String(endHourVal ?? "18"),
-            endMinute: String(endMinuteVal ?? "0"),
-          })
+          nextTimes.set(id, { ...DEFAULT_TIME })
           setTimes(nextTimes)
         }
       }
       setSelectedIds(next)
       dispatchBoth(next, nextTimes)
     },
-    [selectedIds, times, startHourVal, startMinuteVal, endHourVal, endMinuteVal, dispatchBoth],
+    [selectedIds, times, dispatchBoth],
   )
 
   const handleTimeChange = useCallback(
     (resourceId: string, field: keyof ResourceTime, value: string) => {
       const nextTimes = new Map(times)
-      const existing = nextTimes.get(resourceId) ?? { startHour: "16", startMinute: "0", endHour: "18", endMinute: "0" }
+      const existing = nextTimes.get(resourceId) ?? { ...DEFAULT_TIME }
       nextTimes.set(resourceId, { ...existing, [field]: value })
       setTimes(nextTimes)
       dispatchBoth(selectedIds, nextTimes)
@@ -199,6 +172,7 @@ export function BowlingResourcePicker() {
 
   const typeLabel = typeVal === "kregle" ? "Tory kręgli" : "Stoły bilardowe"
   const singular = typeVal === "kregle" ? "Tor" : "Stół"
+  const timesHeading = typeVal === "kregle" ? "Godziny per tor" : "Godziny per stół"
   const selectedResources = allResources.filter((r) => selectedIds.has(String(r.id)))
 
   return (
@@ -234,11 +208,11 @@ export function BowlingResourcePicker() {
           {/* Per-resource time inputs */}
           {selectedResources.length > 0 && (
             <div className="brp__times-table">
-              <div className="brp__times-head">Godziny per zasób</div>
+              <div className="brp__times-head">{timesHeading}</div>
               {selectedResources.map((r) => {
                 const id = String(r.id)
                 const name = r.label || `${singular} ${r.number}`
-                const t = times.get(id) ?? { startHour: "16", startMinute: "0", endHour: "18", endMinute: "0" }
+                const t = times.get(id) ?? { ...DEFAULT_TIME }
                 return (
                   <div key={id} className="brp__time-row">
                     <span className="brp__time-name">{name}</span>
@@ -250,7 +224,9 @@ export function BowlingResourcePicker() {
                         value={t.startHour}
                         onChange={(e) => handleTimeChange(id, "startHour", e.target.value)}
                       >
-                        {HOUR_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        {HOUR_OPTS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                       <span className="brp__time-sep">Do</span>
                       <select
@@ -259,7 +235,9 @@ export function BowlingResourcePicker() {
                         value={t.endHour}
                         onChange={(e) => handleTimeChange(id, "endHour", e.target.value)}
                       >
-                        {HOUR_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        {HOUR_OPTS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -272,10 +250,16 @@ export function BowlingResourcePicker() {
             <p className="brp__summary">
               Wybrano: <strong>{selectedIds.size}</strong>{" "}
               {selectedIds.size === 1
-                ? typeVal === "kregle" ? "tor" : "stół"
+                ? typeVal === "kregle"
+                  ? "tor"
+                  : "stół"
                 : selectedIds.size < 5
-                  ? typeVal === "kregle" ? "tory" : "stoły"
-                  : typeVal === "kregle" ? "torów" : "stołów"}
+                  ? typeVal === "kregle"
+                    ? "tory"
+                    : "stoły"
+                  : typeVal === "kregle"
+                    ? "torów"
+                    : "stołów"}
             </p>
           )}
         </>
