@@ -21,7 +21,7 @@ import {
 import { registerTransaction } from "@/lib/p24";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
-import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
+import { getBlockingEvent, getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 
 type CellStatus = "free" | "busy" | "blocked";
 

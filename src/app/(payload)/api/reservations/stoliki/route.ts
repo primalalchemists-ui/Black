@@ -3,7 +3,7 @@ import { getPayload } from "payload";
 import config from "@payload-config";
 import { reservationCreateRequestSchema } from "@/lib/validation/reservations";
 import { getNowInWarsaw, isSlotBookableWithLeadTime, getNextReservationNumber } from "../_shared";
-import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
+import { getBlockingEvent, getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 import { getMailClient, getMailFrom, getOwnerTo, effectiveTo } from "@/lib/mail";
 import { stolikClientText, stolikOwnerText, stolikClientHtml, stolikOwnerHtml } from "@/lib/mailTemplates";
 
