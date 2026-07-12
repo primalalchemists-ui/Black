@@ -14,13 +14,22 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
   return (
     <footer className="w-full">
       <div className="max-w-[1200px] mx-auto px-4 md:px-0">
-        <div className="border-t pt-5 pb-3">
+        <div className="border-t pt-5 pb-3 flex items-center gap-4">
+          <div className="relative h-[48px] w-[120px] shrink-0">
+            <Image
+              src="/images/logo/Przelewy24_logo.png"
+              alt="Przelewy24"
+              fill
+              className="object-contain object-left"
+            />
+          </div>
+
           <a
             href="/dofinansowanie"
             aria-label="Informacja o dofinansowaniu"
-            className="block focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="flex-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
-            <div className="relative w-full h-[64px]">
+            <div className="relative w-full h-[56px]">
               <Image
                 src="/images/logo/logotyp-unia.png"
                 alt="Logotyp Funduszy Europejskich i NextGenerationEU"
@@ -29,6 +38,15 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               />
             </div>
           </a>
+
+          <div className="relative h-[48px] w-[100px] shrink-0">
+            <Image
+              src="/images/logo/blik-logo.svg"
+              alt="BLIK"
+              fill
+              className="object-contain object-right"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-6 py-6 lg:flex-row lg:items-center lg:justify-between">
