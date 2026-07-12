@@ -59,20 +59,20 @@ export const Payments: CollectionConfig = {
         // expensive req.payload.find (conflict check) for kregle/bilard types.
         // Catch 404: when a reservation is deleted, Payload nulls out payments.reservation
         // which triggers this hook — but the reservation is already gone, so ignore it.
-        try {
-          await req.payload.update({
-            collection: 'reservations',
-            id: reservationId,
-            data: {
-              paymentProvider: doc.provider,
-              paymentStatus: mapPaymentToReservationStatus(doc.status as PaymentStatus),
-            },
-            overrideAccess: true,
-            context: { skipConflictCheck: true } as any,
-          })
-        } catch (err: any) {
-          if (err?.status !== 404) throw err
-        }
+        // Fire-and-forget: never block the caller (delete, create, etc.) on this sync.
+        // If the reservation is mid-delete, being deleted, or the update deadlocks — just log and move on.
+        req.payload.update({
+          collection: 'reservations',
+          id: reservationId,
+          data: {
+            paymentProvider: doc.provider,
+            paymentStatus: mapPaymentToReservationStatus(doc.status as PaymentStatus),
+          },
+          overrideAccess: true,
+          context: { skipConflictCheck: true } as any,
+        }).catch((err: any) => {
+          console.error('[Payments.afterChange] reservation sync skipped:', err?.message ?? err)
+        })
       },
     ],
   },

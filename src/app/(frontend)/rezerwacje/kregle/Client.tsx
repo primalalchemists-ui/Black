@@ -45,6 +45,17 @@ type AvailabilityResponse =
     }
   | { ok: false; error: string };
 
+function cancelPendingSession() {
+  const sessionId = sessionStorage.getItem("_pendingCancelSession")
+  if (!sessionId) return
+  sessionStorage.removeItem("_pendingCancelSession")
+  fetch("/api/reservations/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  }).catch(() => {})
+}
+
 export default function RezerwacjeKreglePage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [gridReady, setGridReady] = useState(false);
@@ -62,6 +73,9 @@ export default function RezerwacjeKreglePage() {
   });
 
   const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
+
+  // Cancel any pending payment session left from browser-back from P24
+  useEffect(() => { cancelPendingSession() }, [])
 
   useEffect(() => {
     let alive = true;
@@ -212,6 +226,7 @@ export default function RezerwacjeKreglePage() {
 
       const data = parsed ?? {};
       if (data?.redirectUrl) {
+        if (data?.groupId) sessionStorage.setItem("_pendingCancelSession", data.groupId)
         window.location.href = data.redirectUrl;
         return;
       }

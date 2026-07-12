@@ -41,6 +41,7 @@ export default async function PodziekowaniePageWrapper({
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : ""
 
   let docs: any[] = []
+  let wasAbandoned = false
 
   if (sessionId) {
     try {
@@ -53,6 +54,48 @@ export default async function PodziekowaniePageWrapper({
         overrideAccess: true,
       })
       docs = result.docs as any[]
+
+      const allPending = docs.length > 0 && docs.every((d) => d.paymentStatus === "pending")
+
+      if (allPending) {
+        // Check if a payment callback arrived (payment record exists = P24 confirmed payment)
+        const paymentCheck = await payload.find({
+          collection: "payments",
+          limit: 1,
+          overrideAccess: true,
+          where: { p24SessionId: { equals: sessionId } },
+        })
+        const callbackArrived = paymentCheck.docs.length > 0
+
+        if (!callbackArrived) {
+          // User left P24 without paying — cancel the pending reservation immediately
+          wasAbandoned = true
+          for (const doc of docs) {
+            try {
+              await payload.delete({ collection: "reservations", id: doc.id, overrideAccess: true })
+            } catch (delErr) {
+              console.error("[podziekowanie] delete failed, cancelling:", delErr)
+              await payload.update({
+                collection: "reservations",
+                id: doc.id,
+                overrideAccess: true,
+                data: { status: "cancelled", paymentStatus: "failed" } as any,
+              }).catch(() => {})
+            }
+          }
+          docs = []
+        } else {
+          // Callback arrived but reservation not yet updated (race condition) — re-fetch
+          const refreshed = await payload.find({
+            collection: "reservations",
+            limit: 20,
+            depth: 1,
+            where: { groupId: { equals: sessionId } },
+            overrideAccess: true,
+          })
+          docs = refreshed.docs as any[]
+        }
+      }
     } catch (err) {
       console.error("[podziekowanie] Błąd pobierania rezerwacji:", err)
     }
@@ -136,6 +179,30 @@ export default async function PodziekowaniePageWrapper({
   const eventStartHH = isEvent && first?.startHour != null
     ? `${fmt2(Number(first.startHour ?? 0))}:${fmt2(Number(first.startMinute ?? 0))}`
     : null
+
+  if (wasAbandoned) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-16 text-center">
+        <div className="mx-auto w-full max-w-lg">
+          <div className="mb-6 flex justify-center">
+            <Clock className="h-16 w-16 text-muted-foreground" />
+          </div>
+          <h1 className="mb-3 text-3xl font-bold tracking-tight">Płatność nie została ukończona</h1>
+          <p className="mb-8 text-muted-foreground">
+            Rezerwacja została anulowana. Możesz spróbować ponownie.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Link href="/rezerwacje">Wróć do rezerwacji</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/">Strona główna</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-16 text-center">

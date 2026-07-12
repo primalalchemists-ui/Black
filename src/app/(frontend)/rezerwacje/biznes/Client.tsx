@@ -60,6 +60,17 @@ function parseCapacity(capacityLabel: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function cancelPendingSession() {
+  const sessionId = sessionStorage.getItem("_pendingCancelSession")
+  if (!sessionId) return
+  sessionStorage.removeItem("_pendingCancelSession")
+  fetch("/api/reservations/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  }).catch(() => {})
+}
+
 export default function RezerwacjeBiznesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -110,6 +121,9 @@ export default function RezerwacjeBiznesPage() {
     reValidateMode: "onChange",
     shouldFocusError: false,
   });
+
+  // Cancel any pending payment session left from browser-back from P24
+  useEffect(() => { cancelPendingSession() }, [])
 
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
@@ -212,6 +226,7 @@ export default function RezerwacjeBiznesPage() {
       }
 
       if (json?.redirectUrl) {
+        if (json?.groupId) sessionStorage.setItem("_pendingCancelSession", json.groupId)
         window.location.href = String(json.redirectUrl);
         return;
       }

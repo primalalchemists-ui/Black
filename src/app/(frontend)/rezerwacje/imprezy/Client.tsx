@@ -60,6 +60,17 @@ interface Props {
   initialEventId?: string;
 }
 
+function cancelPendingSession() {
+  const sessionId = sessionStorage.getItem("_pendingCancelSession")
+  if (!sessionId) return
+  sessionStorage.removeItem("_pendingCancelSession")
+  fetch("/api/reservations/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  }).catch(() => {})
+}
+
 export default function ImprezaClient({ initialEventId }: Props) {
   const router = useRouter();
 
@@ -117,6 +128,9 @@ export default function ImprezaClient({ initialEventId }: Props) {
       setFetchedOnce(true);
     }
   }, []);
+
+  // Cancel any pending payment session left from browser-back from P24
+  useEffect(() => { cancelPendingSession() }, [])
 
   useEffect(() => {
     let alive = true;
@@ -207,6 +221,7 @@ export default function ImprezaClient({ initialEventId }: Props) {
       }
 
       if (json?.redirectUrl) {
+        if (json?.groupId) sessionStorage.setItem("_pendingCancelSession", json.groupId)
         window.location.href = String(json.redirectUrl);
         return;
       }
