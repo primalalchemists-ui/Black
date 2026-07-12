@@ -83,7 +83,7 @@ export function EventSlide({
 
           {e.description?.trim() && (
             <div className="relative z-20">
-              <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground${descExpanded ? "" : " line-clamp-4"}`}>
+              <p className={`whitespace-pre-line text-sm leading-relaxed text-muted-foreground ${descExpanded ? "max-h-[5.75rem] overflow-y-auto pr-1" : "line-clamp-4"}`}>
                 {e.description}
               </p>
               <button

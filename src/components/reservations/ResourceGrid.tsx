@@ -379,7 +379,7 @@ export function ResourceGrid({
             </div>
           </div>
 
-          <div className="rounded-lg border p-4 mt-8">
+          <div className="rounded-lg border p-4 mt-8 min-h-[5rem]">
             <div className="text-sm text-muted-foreground">Wybrano</div>
 
             {!segments.length ? (
