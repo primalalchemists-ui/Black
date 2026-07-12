@@ -57,16 +57,22 @@ export const Payments: CollectionConfig = {
         // already stored on the payment doc itself (payments.reservation field).
         // context.skipConflictCheck: true — Reservations.beforeChange skips the
         // expensive req.payload.find (conflict check) for kregle/bilard types.
-        await req.payload.update({
-          collection: 'reservations',
-          id: reservationId,
-          data: {
-            paymentProvider: doc.provider,
-            paymentStatus: mapPaymentToReservationStatus(doc.status as PaymentStatus),
-          },
-          overrideAccess: true,
-          context: { skipConflictCheck: true } as any,
-        })
+        // Catch 404: when a reservation is deleted, Payload nulls out payments.reservation
+        // which triggers this hook — but the reservation is already gone, so ignore it.
+        try {
+          await req.payload.update({
+            collection: 'reservations',
+            id: reservationId,
+            data: {
+              paymentProvider: doc.provider,
+              paymentStatus: mapPaymentToReservationStatus(doc.status as PaymentStatus),
+            },
+            overrideAccess: true,
+            context: { skipConflictCheck: true } as any,
+          })
+        } catch (err: any) {
+          if (err?.status !== 404) throw err
+        }
       },
     ],
   },
