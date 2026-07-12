@@ -50,16 +50,22 @@ export const Payments: CollectionConfig = {
         const reservationId =
           typeof doc.reservation === 'string' ? doc.reservation : (doc.reservation as any).id
 
-        // Sync payment id + status to reservation
+        // Sync payment status to reservation.
+        // Do NOT set `payment: doc.id` here — the payment row may not be committed
+        // yet when this hook runs on a separate connection, causing an FK violation
+        // (reservations_payment_id_payments_id_fk). The payment→reservation link is
+        // already stored on the payment doc itself (payments.reservation field).
+        // context.skipConflictCheck: true — Reservations.beforeChange skips the
+        // expensive req.payload.find (conflict check) for kregle/bilard types.
         await req.payload.update({
           collection: 'reservations',
           id: reservationId,
           data: {
-            payment: doc.id,
             paymentProvider: doc.provider,
             paymentStatus: mapPaymentToReservationStatus(doc.status as PaymentStatus),
           },
           overrideAccess: true,
+          context: { skipConflictCheck: true } as any,
         })
       },
     ],

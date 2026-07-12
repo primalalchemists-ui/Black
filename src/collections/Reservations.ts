@@ -243,6 +243,11 @@ export const Reservations: CollectionConfig = {
     // ✅ BLOKADA KOLIZJI + BLOKADA PRZESZŁOŚCI (działa też w panelu)
     beforeChange: [
       async ({ data, req, operation, originalDoc }) => {
+        // Skip conflict check for payment-only updates (triggered by Payments.afterChange hook).
+        // These updates don't change time/resource fields so no conflict can arise,
+        // and running req.payload.find here would exhaust the DB connection pool.
+        if ((req.context as any)?.skipConflictCheck) return data;
+
         const incoming: any = data || {};
         const type = String(incoming.type ?? originalDoc?.type ?? "");
         const status = String(incoming.status ?? originalDoc?.status ?? "");
