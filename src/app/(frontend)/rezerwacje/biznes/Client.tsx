@@ -175,9 +175,22 @@ export default function RezerwacjeBiznesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cancel any pending payment session (browser-back from P24), then reload event list
+  // Cancel pending session on back-from-P24, restore form state so user doesn't retype
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { cancelPendingSession().then(() => loadEvents()) }, [])
+  useEffect(() => {
+    const savedRaw = sessionStorage.getItem("_pendingFormState_biznes")
+    sessionStorage.removeItem("_pendingFormState_biznes")
+    cancelPendingSession().then(() => loadEvents()).then(() => {
+      if (savedRaw) {
+        try {
+          const saved = JSON.parse(savedRaw)
+          if (saved.eventId) setEventId(saved.eventId)
+          if (saved.formValues) form.reset(saved.formValues)
+          setStep(2)
+        } catch {}
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (!eventId) return;
@@ -227,7 +240,13 @@ export default function RezerwacjeBiznesPage() {
       }
 
       if (json?.redirectUrl) {
-        if (json?.groupId) sessionStorage.setItem("_pendingCancelSession", json.groupId)
+        if (json?.groupId) {
+          sessionStorage.setItem("_pendingCancelSession", json.groupId)
+          sessionStorage.setItem("_pendingFormState_biznes", JSON.stringify({
+            eventId,
+            formValues: form.getValues(),
+          }))
+        }
         window.location.href = String(json.redirectUrl);
         return;
       }

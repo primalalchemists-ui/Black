@@ -74,10 +74,6 @@ export default function RezerwacjeBilardPage() {
   // ✅ ustawienia z panelu (przez endpoint GET)
   const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
 
-  // Cancel any pending payment session left from browser-back from P24, then refresh grid
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { cancelPendingSession().then(() => setGridRefreshKey(k => k + 1)) }, [])
-
   useEffect(() => {
     let alive = true;
 
@@ -162,6 +158,25 @@ export default function RezerwacjeBilardPage() {
     shouldFocusError: false,
   });
 
+  // Cancel pending session on back-from-P24, restore form state so user doesn't retype
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const savedRaw = sessionStorage.getItem("_pendingFormState_bilard")
+    sessionStorage.removeItem("_pendingFormState_bilard")
+    cancelPendingSession().then(() => {
+      setGridRefreshKey(k => k + 1)
+      if (savedRaw) {
+        try {
+          const saved = JSON.parse(savedRaw)
+          if (saved.day) setDay(saved.day)
+          if (saved.grid) setGrid(saved.grid)
+          if (saved.formValues) form.reset(saved.formValues)
+          setStep(2)
+        } catch {}
+      }
+    })
+  }, [])
+
   useEffect(() => {
     if (step !== 2) return;
 
@@ -232,7 +247,14 @@ export default function RezerwacjeBilardPage() {
 
       const data = parsed ?? {};
       if (data?.redirectUrl) {
-        if (data?.groupId) sessionStorage.setItem("_pendingCancelSession", data.groupId)
+        if (data?.groupId) {
+          sessionStorage.setItem("_pendingCancelSession", data.groupId)
+          sessionStorage.setItem("_pendingFormState_bilard", JSON.stringify({
+            day,
+            grid,
+            formValues: form.getValues(),
+          }))
+        }
         window.location.href = data.redirectUrl;
         return;
       }
