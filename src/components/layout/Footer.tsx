@@ -14,8 +14,47 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
   return (
     <footer className="w-full">
       <div className="max-w-[1200px] mx-auto px-4 md:px-0">
-        <div className="border-t pt-5 pb-3 flex items-center gap-4">
-          <div className="relative h-[48px] w-[120px] shrink-0">
+        {/* Mobile: P24 + BLIK w jednej linii, pod spodem EU na ich szerokość */}
+        <div className="border-t pt-5 pb-3 md:hidden">
+          <div className="inline-flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className="relative h-[36px] w-[90px] shrink-0">
+                <Image
+                  src="/images/logo/Przelewy24_logo.png"
+                  alt="Przelewy24"
+                  fill
+                  className="object-contain object-left"
+                />
+              </div>
+              <div className="relative h-[22px] w-[46px] shrink-0">
+                <Image
+                  src="/images/logo/blik-logo.svg"
+                  alt="BLIK"
+                  fill
+                  className="object-contain object-left"
+                />
+              </div>
+            </div>
+            <a
+              href="/dofinansowanie"
+              aria-label="Informacja o dofinansowaniu"
+              className="block focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <div className="relative w-full h-[46px]">
+                <Image
+                  src="/images/logo/logotyp-unia.png"
+                  alt="Logotyp Funduszy Europejskich i NextGenerationEU"
+                  fill
+                  className="object-contain object-left"
+                />
+              </div>
+            </a>
+          </div>
+        </div>
+
+        {/* Desktop: P24 | EU (flex-1) | BLIK */}
+        <div className="border-t pt-5 pb-3 hidden md:flex items-center gap-2">
+          <div className="relative h-[44px] w-[110px] shrink-0">
             <Image
               src="/images/logo/Przelewy24_logo.png"
               alt="Przelewy24"
@@ -23,7 +62,6 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               className="object-contain object-left"
             />
           </div>
-
           <a
             href="/dofinansowanie"
             aria-label="Informacja o dofinansowaniu"
@@ -38,8 +76,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
               />
             </div>
           </a>
-
-          <div className="relative h-[48px] w-[100px] shrink-0">
+          <div className="relative h-[26px] w-[56px] shrink-0">
             <Image
               src="/images/logo/blik-logo.svg"
               alt="BLIK"

@@ -246,7 +246,6 @@ export const Reservations: CollectionConfig = {
         const incoming: any = data || {};
         const type = String(incoming.type ?? originalDoc?.type ?? "");
         const status = String(incoming.status ?? originalDoc?.status ?? "");
-        const source = String(incoming.source ?? originalDoc?.source ?? "online");
 
         // 1) interesuje nas tylko bilard/kręgle
         if (type !== "kregle" && type !== "bilard") return data;
@@ -262,16 +261,11 @@ export const Reservations: CollectionConfig = {
         const endsAt = new Date(endsAtStr);
         if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) return data;
 
-        // 3) BLOKADA PRZESZŁOŚCI:
-        // - online: zawsze blok
-        // - staff/admin: blok, chyba że status=completed (np. dopisanie historycznej)
+        // 3) BLOKADA PRZESZŁOŚCI
         const isStaff = ["admin", "staff"].includes(req.user?.role);
         const now = new Date();
-
         const allowPastBecauseCompleted = isStaff && status === "completed";
-        const mustBlockPast =
-          !allowPastBecauseCompleted && startsAt.getTime() < now.getTime();
-
+        const mustBlockPast = !allowPastBecauseCompleted && startsAt.getTime() < now.getTime();
         if (mustBlockPast) {
           throw new Error("Nie można tworzyć rezerwacji w przeszłości.");
         }
@@ -298,24 +292,103 @@ export const Reservations: CollectionConfig = {
           },
         });
 
-        for (const r of (candidates.docs || []) as any[]) {
-          // jeśli kandydat też jest cancelled/no_show to pomiń (na wypadek)
-          const rStatus = String(r.status ?? "");
-          if (IGNORED_STATUSES.includes(rStatus as any)) continue;
+        // 7) Sprawdź kolizje — per-segment jeśli rezerwacja ma segmenty per zasób,
+        //    inaczej top-level. Segment-level jest konieczny, bo kilka stołów/torów
+        //    może mieć różne godziny w jednej rezerwacji — span całej rezerwacji
+        //    byłby zbyt szeroki i powodował fałszywe kolizje.
 
-          // (opcjonalnie) jeśli chcesz, aby completed NIE blokowało dostępności, odkomentuj:
-          // if (rStatus === "completed") continue;
+        function getResId(val: any): string {
+          if (!val) return "";
+          if (typeof val === "string" || typeof val === "number") return String(val);
+          if (val?.id != null) return String(val.id);
+          if (val?.value != null) {
+            const v = val.value;
+            if (typeof v === "string" || typeof v === "number") return String(v);
+            if (v?.id != null) return String(v.id);
+          }
+          return "";
+        }
 
-          const otherResources = relIds(r.resources);
-          const touchesSame = otherResources.some((id) => resources.includes(id));
-          if (!touchesSame) continue;
+        function segToDate(dayIso: any, hour: unknown, minute: unknown): Date {
+          const base = new Date(dayIso);
+          const y = base.getUTCFullYear();
+          const m = base.getUTCMonth();
+          const d = base.getUTCDate();
+          return new Date(Date.UTC(y, m, d, Number(hour ?? 0), Number(minute ?? 0), 0, 0));
+        }
 
-          const rStart = new Date(r.startsAt);
-          const rEnd = new Date(r.endsAt);
-          if (isNaN(rStart.getTime()) || isNaN(rEnd.getTime())) continue;
+        const incomingSegments: any[] = Array.isArray(incoming.segments)
+          ? (incoming.segments as any[]).filter((s: any) => s?.resource != null)
+          : [];
+        const incomingDay = incoming.day ?? originalDoc?.day;
 
-          if (overlaps(rStart, rEnd, startsAt, endsAt)) {
-            throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+        if (incomingSegments.length > 0 && incomingDay) {
+          // Segment-level collision check: per zasób, per przedział czasu
+          const incomingByRes = new Map<string, Array<{ start: Date; end: Date }>>();
+          for (const seg of incomingSegments) {
+            const resId = getResId(seg.resource);
+            if (!resId) continue;
+            const start = segToDate(incomingDay, seg.startHour, seg.startMinute);
+            const end = segToDate(incomingDay, seg.endHour, seg.endMinute);
+            if (!incomingByRes.has(resId)) incomingByRes.set(resId, []);
+            incomingByRes.get(resId)!.push({ start, end });
+          }
+
+          for (const r of (candidates.docs || []) as any[]) {
+            const rStatus = String(r.status ?? "");
+            if (IGNORED_STATUSES.includes(rStatus as any)) continue;
+
+            const rSegs: any[] = Array.isArray(r.segments)
+              ? (r.segments as any[]).filter((s: any) => s?.resource != null)
+              : [];
+            const rDay = r.day ?? r.startsAt;
+
+            if (rSegs.length > 0 && rDay) {
+              // Istniejąca rezerwacja też ma segmenty — porównaj per zasób
+              for (const rSeg of rSegs) {
+                const resId = getResId(rSeg.resource);
+                const inTimes = incomingByRes.get(resId);
+                if (!inTimes) continue;
+                const rStart = segToDate(rDay, rSeg.startHour, rSeg.startMinute);
+                const rEnd = segToDate(rDay, rSeg.endHour, rSeg.endMinute);
+                for (const inTime of inTimes) {
+                  if (overlaps(rStart, rEnd, inTime.start, inTime.end)) {
+                    throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+                  }
+                }
+              }
+            } else {
+              // Istniejąca rezerwacja bez segmentów — top-level check per zasób
+              const otherRes = relIds(r.resources);
+              const rStart = new Date(r.startsAt);
+              const rEnd = new Date(r.endsAt);
+              for (const [resId, inTimes] of incomingByRes) {
+                if (!otherRes.includes(resId)) continue;
+                for (const inTime of inTimes) {
+                  if (overlaps(rStart, rEnd, inTime.start, inTime.end)) {
+                    throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Rezerwacja bez segmentów — stary check top-level
+          for (const r of (candidates.docs || []) as any[]) {
+            const rStatus = String(r.status ?? "");
+            if (IGNORED_STATUSES.includes(rStatus as any)) continue;
+
+            const otherResources = relIds(r.resources);
+            const touchesSame = otherResources.some((id) => resources.includes(id));
+            if (!touchesSame) continue;
+
+            const rStart = new Date(r.startsAt);
+            const rEnd = new Date(r.endsAt);
+            if (isNaN(rStart.getTime()) || isNaN(rEnd.getTime())) continue;
+
+            if (overlaps(rStart, rEnd, startsAt, endsAt)) {
+              throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+            }
           }
         }
 
