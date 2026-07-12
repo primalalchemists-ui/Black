@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
+const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 
 const hourOptions = Array.from({ length: 24 }, (_, h) => ({
   label: `${String(h).padStart(2, '0')}:00`,
@@ -41,9 +41,9 @@ export const Events: CollectionConfig = {
   },
   access: {
     read: () => true,
-    create: isStaffOrAdmin,
-    update: isStaffOrAdmin,
-    delete: ({ req }: any) => req.user?.role === 'admin',
+    create: isAdmin,
+    update: isAdmin,
+    delete: isAdmin,
   },
 
   hooks: {

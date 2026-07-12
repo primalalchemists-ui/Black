@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
+const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
@@ -36,8 +37,8 @@ export const Payments: CollectionConfig = {
   access: {
     read: isStaffOrAdmin,
     create: () => true,
-    update: isStaffOrAdmin,
-    delete: ({ req }: any) => req.user?.role === 'admin',
+    update: isAdmin,
+    delete: isAdmin,
   },
 
   hooks: {

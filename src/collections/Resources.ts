@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
+const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 
 export const Resources: CollectionConfig = {
   slug: 'resources',
@@ -18,9 +18,9 @@ export const Resources: CollectionConfig = {
   },
   access: {
     read: isStaffOrAdmin,
-    create: isStaffOrAdmin,
-    update: isStaffOrAdmin,
-    delete: ({ req }: any) => req.user?.role === 'admin',
+    create: isAdmin,
+    update: isAdmin,
+    delete: isAdmin,
   },
   fields: [
     {

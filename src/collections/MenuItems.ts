@@ -28,7 +28,7 @@ export const MenuItems: CollectionConfig = {
   fields: [
     { name: 'name', label: 'Nazwa', type: 'text', required: true },
     { name: 'description', label: 'Opis', type: 'textarea' },
-    { name: 'image', label: 'Zdjęcie', type: 'upload', relationTo: 'media' },
+    { name: 'image', label: 'Zdjęcie', type: 'upload', relationTo: 'media', admin: { hidden: true } },
     {
       name: 'category',
       label: 'Kategoria',

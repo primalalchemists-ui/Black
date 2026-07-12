@@ -1,5 +1,6 @@
 import type { GlobalConfig } from 'payload'
 
+const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
 
 export const ReservationSettings: GlobalConfig = {
@@ -8,7 +9,7 @@ export const ReservationSettings: GlobalConfig = {
   admin: { group: 'Ustawienia' },
   access: {
     read: isStaffOrAdmin,
-    update: isStaffOrAdmin,
+    update: isAdmin,
   },
 
   fields: [

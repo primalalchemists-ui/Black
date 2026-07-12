@@ -1,12 +1,12 @@
 import type { GlobalConfig } from 'payload'
 
-const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
+const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
   label: 'Ustawienia strony',
   admin: { group: 'Ustawienia' },
-  access: { read: () => true, update: isStaffOrAdmin },
+  access: { read: () => true, update: isAdmin },
   fields: [
     { name: 'name', label: 'Nazwa obiektu', type: 'text', required: true },
     { name: 'slogan', label: 'Slogan', type: 'text' },
