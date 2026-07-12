@@ -212,6 +212,13 @@ export async function POST(req: Request) {
             email: data.email,
           })
 
+          // Zwolnij advisory lock PRZED payload.update/create wewnątrz hooków.
+          // Hook afterChange Payments → update(reservations) wymaga osobnego połączenia DB;
+          // trzymanie lockClient wyczerpuje pulę → deadlock.
+          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
+          lockClient.release()
+          lockClient = null // finally { if (lockClient) } nie zwolni ponownie
+
           await payload.update({
             collection: "reservations",
             id: reservationDoc.id,
@@ -256,8 +263,10 @@ export async function POST(req: Request) {
         }
       }
     } finally {
-      await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
-      lockClient.release()
+      if (lockClient) {
+        await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
+        lockClient.release()
+      }
     }
 
     // 8. Darmowe — wyślij maile od razu

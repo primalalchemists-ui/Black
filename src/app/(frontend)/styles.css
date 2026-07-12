@@ -12,6 +12,15 @@ body {
   overflow-x: hidden;
 }
 
+/* Radix UI (react-remove-scroll) adds padding-right to body to compensate for the
+   hidden scrollbar when a Select/Dialog is open. Since html already has
+   scrollbar-gutter: stable the space is already reserved — the extra padding
+   causes a layout shift. Counteract it. */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
 @layer base {
   :root {
     --background: 42 39% 94%;        /* #F5F1E8 — ciepłe beżowe tło */
