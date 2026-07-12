@@ -44,15 +44,15 @@ type AvailabilityResponse =
     }
   | { ok: false; error: string };
 
-function cancelPendingSession() {
+function cancelPendingSession(): Promise<void> {
   const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return
+  if (!sessionId) return Promise.resolve()
   sessionStorage.removeItem("_pendingCancelSession")
-  fetch("/api/reservations/cancel", {
+  return fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).catch(() => {})
+  }).then(() => {}).catch(() => {})
 }
 
 export default function RezerwacjeBilardPage() {
@@ -74,8 +74,9 @@ export default function RezerwacjeBilardPage() {
   // ✅ ustawienia z panelu (przez endpoint GET)
   const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
 
-  // Cancel any pending payment session left from browser-back from P24
-  useEffect(() => { cancelPendingSession() }, [])
+  // Cancel any pending payment session left from browser-back from P24, then refresh grid
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { cancelPendingSession().then(() => setGridRefreshKey(k => k + 1)) }, [])
 
   useEffect(() => {
     let alive = true;

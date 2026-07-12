@@ -60,15 +60,15 @@ interface Props {
   initialEventId?: string;
 }
 
-function cancelPendingSession() {
+function cancelPendingSession(): Promise<void> {
   const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return
+  if (!sessionId) return Promise.resolve()
   sessionStorage.removeItem("_pendingCancelSession")
-  fetch("/api/reservations/cancel", {
+  return fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).catch(() => {})
+  }).then(() => {}).catch(() => {})
 }
 
 export default function ImprezaClient({ initialEventId }: Props) {
@@ -129,9 +129,6 @@ export default function ImprezaClient({ initialEventId }: Props) {
     }
   }, []);
 
-  // Cancel any pending payment session left from browser-back from P24
-  useEffect(() => { cancelPendingSession() }, [])
-
   useEffect(() => {
     let alive = true;
 
@@ -174,6 +171,10 @@ export default function ImprezaClient({ initialEventId }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cancel any pending payment session (browser-back from P24), then reload event list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { cancelPendingSession().then(() => loadEvents()) }, [])
 
   useEffect(() => {
     if (!eventId) return;

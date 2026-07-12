@@ -60,15 +60,15 @@ function parseCapacity(capacityLabel: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function cancelPendingSession() {
+function cancelPendingSession(): Promise<void> {
   const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return
+  if (!sessionId) return Promise.resolve()
   sessionStorage.removeItem("_pendingCancelSession")
-  fetch("/api/reservations/cancel", {
+  return fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).catch(() => {})
+  }).then(() => {}).catch(() => {})
 }
 
 export default function RezerwacjeBiznesPage() {
@@ -122,9 +122,6 @@ export default function RezerwacjeBiznesPage() {
     shouldFocusError: false,
   });
 
-  // Cancel any pending payment session left from browser-back from P24
-  useEffect(() => { cancelPendingSession() }, [])
-
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
     try {
@@ -177,6 +174,10 @@ export default function RezerwacjeBiznesPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cancel any pending payment session (browser-back from P24), then reload event list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { cancelPendingSession().then(() => loadEvents()) }, [])
 
   useEffect(() => {
     if (!eventId) return;
