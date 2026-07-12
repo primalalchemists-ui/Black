@@ -86,119 +86,166 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Sprawdź capacity (partySize-based)
-    const capacity = typeof event.capacity === "number" && event.capacity > 0 ? event.capacity : null
-    if (capacity !== null) {
-      const takenDocs = await payload.find({
-        collection: "reservations",
-        limit: 5000,
-        overrideAccess: true,
-        where: {
-          and: [
-            { type: { equals: "biznes" } },
-            { event: { equals: eventId } },
-            { status: { in: ["new", "confirmed"] } },
-          ],
-        },
-      })
-      const takenSeats = (takenDocs.docs as any[]).reduce((sum, r) => sum + (Number(r.partySize) || 1), 0)
-      if (takenSeats + (data.partySize ?? 1) > capacity) {
-        console.log(`[biznes] 409 capacity_exceeded eventId=${eventId} capacity=${capacity} takenSeats=${takenSeats} requested=${data.partySize ?? 1}`)
-        return NextResponse.json(
-          { error: "NO_AVAILABILITY", message: "Brak wystarczającej liczby miejsc na to wydarzenie." },
-          { status: 409 },
-        )
-      }
-    }
-
-    // 3. Sprawdź blokadę lokalu
-    if (event.day) {
-      const dayStr = new Date(event.day).toISOString().slice(0, 10)
-      const blockCheck = await getBlockingEvent(
-        dayStr,
-        event.allDay ? undefined : Number(event.startHour ?? 0),
-        event.allDay ? undefined : Number(event.startMinute ?? 0),
-      )
-      if (blockCheck.blocked && blockCheck.eventTitle !== event.title) {
-        console.log(`[biznes] 409 venue_blocked eventId=${eventId} blockingEvent="${blockCheck.eventTitle}" thisEvent="${event.title}"`)
-        return NextResponse.json(
-          { error: "VENUE_BLOCKED", message: "Lokal jest zarezerwowany na inne wydarzenie." },
-          { status: 409 },
-        )
-      }
-    }
-
-    // 4. groupId + reservationNumber
-    const groupId = crypto.randomUUID()
-    const reservationNumber = await getNextReservationNumber(payload, "W")
-
     const pricePLN = typeof event.pricePLN === "number" ? event.pricePLN : 0
     const requiresPayment = pricePLN > 0
+    const capacity = typeof event.capacity === "number" && event.capacity > 0 ? event.capacity : null
 
-    const startsAt = event.startsAt ? new Date(event.startsAt) : null
-    const endsAt = event.endsAt ? new Date(event.endsAt) : null
-    const dayISO = event.day ? new Date(event.day).toISOString() : (startsAt?.toISOString() ?? new Date().toISOString())
-
-    // 5. Stwórz rezerwację
-    const reservationDoc = await payload.create({
-      collection: "reservations",
-      overrideAccess: true,
-      data: {
-        type: "biznes",
-        event: eventId,
-        groupId,
-        reservationNumber,
-        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-        notes: data.notes || "",
-        day: dayISO,
-        allDay: Boolean(event.allDay),
-        startHour: String(event.startHour ?? "18"),
-        startMinute: String(event.startMinute ?? "0"),
-        endHour: event.endHour != null ? String(event.endHour) : undefined,
-        endMinute: event.endMinute != null ? String(event.endMinute) : undefined,
-        startsAt: startsAt?.toISOString() ?? dayISO,
-        endsAt: endsAt?.toISOString() ?? undefined,
-        partySize: data.partySize ?? 1,
-        disabledPerson: Boolean(data.disabledPerson),
-        disabilityDetails: data.disabilityDetails || "",
-        invoice: {
-          wantInvoice: Boolean(data.wantInvoice),
-          invoiceType: data.invoiceType || undefined,
-          nip: data.nip || "",
-        },
-        acceptRules: true,
-        source: "online",
-        status: "new",
-        paymentStatus: requiresPayment ? "pending" : "not_required",
-        depositRequired: pricePLN > 0,
-        depositAmount: pricePLN > 0 ? pricePLN * (data.partySize ?? 1) : 0,
-        ...(requiresPayment ? { paymentProvider: "p24" } : {}),
-      } as any,
-    })
-
-    console.log(`[biznes] created reservationNumber=${reservationNumber} groupId=${groupId} eventId=${eventId} requiresPayment=${requiresPayment}`)
-
-    // 6. Płatność P24
-    if (requiresPayment) {
-      const amountGrosze = Math.round(pricePLN * (data.partySize ?? 1) * 100)
-      try {
-        const p24Result = await registerTransaction({
-          sessionId: groupId,
-          amount: amountGrosze,
-          description: `Biznes: ${event.title}`,
-          email: data.email,
-        })
-
-        console.log(`[biznes] P24 payUrl=${p24Result.payUrl} groupId=${groupId}`)
-        return NextResponse.json({ ok: true, redirectUrl: p24Result.payUrl, groupId, reservationNumber })
-      } catch (p24Err: any) {
-        console.error("[biznes] P24 error:", p24Err?.message ?? p24Err)
-        await payload.delete({ collection: "reservations", id: reservationDoc.id, overrideAccess: true }).catch(() => {})
-        return NextResponse.json({ error: "PAYMENT_ERROR", message: PAYMENT_CONTACT_MSG }, { status: 502 })
+    // 2. Advisory lock per eventId — zapobiega race condition na capacity
+    const lockKey = `event|${eventId}`
+    let lockClient: any = null
+    try {
+      const dbPool = (payload.db as any)?.pool
+      if (!dbPool?.connect) throw new Error("DB pool unavailable")
+      lockClient = await dbPool.connect()
+      await lockClient.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey])
+    } catch (lockErr) {
+      console.error("[biznes] advisory lock error:", lockErr)
+      if (lockClient) {
+        await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
+        lockClient.release()
       }
+      return NextResponse.json(
+        { error: "SERVICE_UNAVAILABLE", message: "Nie udało się potwierdzić dostępności. Spróbuj ponownie za chwilę." },
+        { status: 503 },
+      )
     }
 
-    // 7. Darmowe lub płatność na miejscu — wyślij maile od razu
+    let reservationDoc: any = null
+    let groupId: string = ""
+    let reservationNumber: string = ""
+
+    try {
+      // 3. Świeże sprawdzenie capacity wewnątrz locka (wyklucz wygasłe pending)
+      if (capacity !== null) {
+        const nowISO = new Date().toISOString()
+        const takenDocs = await payload.find({
+          collection: "reservations",
+          limit: 5000,
+          overrideAccess: true,
+          where: {
+            and: [
+              { type: { equals: "biznes" } },
+              { event: { equals: eventId } },
+              { status: { in: ["new", "confirmed"] } },
+              {
+                or: [
+                  { paymentStatus: { not_equals: "pending" } },
+                  { expiresAt: { exists: false } },
+                  { expiresAt: { greater_than_equal: nowISO } },
+                ],
+              } as any,
+            ],
+          },
+        })
+        const takenSeats = (takenDocs.docs as any[]).reduce((sum, r) => sum + (Number(r.partySize) || 1), 0)
+        if (takenSeats + (data.partySize ?? 1) > capacity) {
+          console.log(`[biznes] 409 capacity_exceeded eventId=${eventId} capacity=${capacity} takenSeats=${takenSeats} requested=${data.partySize ?? 1}`)
+          return NextResponse.json(
+            { error: "NO_AVAILABILITY", message: "Brak wystarczającej liczby miejsc na to wydarzenie." },
+            { status: 409 },
+          )
+        }
+      }
+
+      // 4. Sprawdź blokadę lokalu
+      if (event.day) {
+        const dayStr = new Date(event.day).toISOString().slice(0, 10)
+        const blockCheck = await getBlockingEvent(
+          dayStr,
+          event.allDay ? undefined : Number(event.startHour ?? 0),
+          event.allDay ? undefined : Number(event.startMinute ?? 0),
+        )
+        if (blockCheck.blocked && blockCheck.eventTitle !== event.title) {
+          console.log(`[biznes] 409 venue_blocked eventId=${eventId} blockingEvent="${blockCheck.eventTitle}" thisEvent="${event.title}"`)
+          return NextResponse.json(
+            { error: "VENUE_BLOCKED", message: "Lokal jest zarezerwowany na inne wydarzenie." },
+            { status: 409 },
+          )
+        }
+      }
+
+      // 5. groupId + reservationNumber
+      groupId = crypto.randomUUID()
+      reservationNumber = await getNextReservationNumber(payload, "W")
+
+      const startsAt = event.startsAt ? new Date(event.startsAt) : null
+      const endsAt = event.endsAt ? new Date(event.endsAt) : null
+      const dayISO = event.day ? new Date(event.day).toISOString() : (startsAt?.toISOString() ?? new Date().toISOString())
+
+      // 6. Stwórz rezerwację PRZED P24
+      reservationDoc = await payload.create({
+        collection: "reservations",
+        overrideAccess: true,
+        data: {
+          type: "biznes",
+          event: eventId,
+          groupId,
+          reservationNumber,
+          customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+          notes: data.notes || "",
+          day: dayISO,
+          allDay: Boolean(event.allDay),
+          startHour: String(event.startHour ?? "18"),
+          startMinute: String(event.startMinute ?? "0"),
+          endHour: event.endHour != null ? String(event.endHour) : undefined,
+          endMinute: event.endMinute != null ? String(event.endMinute) : undefined,
+          startsAt: startsAt?.toISOString() ?? dayISO,
+          endsAt: endsAt?.toISOString() ?? undefined,
+          partySize: data.partySize ?? 1,
+          disabledPerson: Boolean(data.disabledPerson),
+          disabilityDetails: data.disabilityDetails || "",
+          invoice: {
+            wantInvoice: Boolean(data.wantInvoice),
+            invoiceType: data.invoiceType || undefined,
+            nip: data.nip || "",
+          },
+          acceptRules: true,
+          source: "online",
+          status: "new",
+          paymentStatus: requiresPayment ? "pending" : "not_required",
+          depositRequired: pricePLN > 0,
+          depositAmount: pricePLN > 0 ? pricePLN * (data.partySize ?? 1) : 0,
+          ...(requiresPayment ? { paymentProvider: "p24", expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() } : {}),
+        } as any,
+      })
+
+      console.log(`[biznes] created reservationNumber=${reservationNumber} groupId=${groupId} eventId=${eventId} requiresPayment=${requiresPayment}`)
+
+      // 7. Płatność P24
+      if (requiresPayment) {
+        const amountGrosze = Math.round(pricePLN * (data.partySize ?? 1) * 100)
+        try {
+          const p24Result = await registerTransaction({
+            sessionId: groupId,
+            amount: amountGrosze,
+            description: `Biznes: ${event.title}`,
+            email: data.email,
+          })
+
+          console.log(`[biznes] P24 payUrl=${p24Result.payUrl} groupId=${groupId}`)
+          return NextResponse.json({ ok: true, redirectUrl: p24Result.payUrl, groupId, reservationNumber })
+        } catch (p24Err: any) {
+          console.error("[biznes] P24 error:", p24Err?.message ?? p24Err)
+          try {
+            await payload.delete({ collection: "reservations", id: reservationDoc.id, overrideAccess: true })
+          } catch (deleteErr) {
+            console.error("[biznes] rollback delete failed, oznaczam jako anulowane:", deleteErr)
+            await payload.update({
+              collection: "reservations",
+              id: reservationDoc.id,
+              overrideAccess: true,
+              data: { status: "cancelled", paymentStatus: "failed" } as any,
+            }).catch((e) => console.error("[biznes] rollback update also failed:", e))
+          }
+          return NextResponse.json({ error: "PAYMENT_ERROR", message: PAYMENT_CONTACT_MSG }, { status: 502 })
+        }
+      }
+    } finally {
+      await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {})
+      lockClient.release()
+    }
+
+    // 8. Darmowe lub płatność na miejscu — wyślij maile od razu
     const dt = getEventDisplayDateTimePL(event)
     try {
       const mail = getMailClient()

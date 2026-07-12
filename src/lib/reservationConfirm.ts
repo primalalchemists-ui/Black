@@ -62,6 +62,72 @@ export async function confirmGroupPayment(
     }
   }
 
+  // Sprawdź czy callback przyszedł po wygaśnięciu holda i czy slot jest nadal wolny
+  const now = new Date()
+  let needsManualReview = false
+
+  for (const doc of docs) {
+    if (!doc.expiresAt || new Date(doc.expiresAt) >= now) continue
+
+    const type = doc.type as string
+    if (type !== "bilard" && type !== "kregle") continue
+
+    const docResIds: string[] = ((doc.resources ?? []) as any[])
+      .map((r: any) => (typeof r === "object" ? String(r.id ?? "") : String(r)))
+      .filter(Boolean)
+
+    if (docResIds.length === 0 || !doc.startsAt || !doc.endsAt) continue
+
+    const conflictDocs = await payload.find({
+      collection: "reservations",
+      limit: 10,
+      overrideAccess: true,
+      where: {
+        and: [
+          { type: { equals: type } },
+          { groupId: { not_equals: String(doc.groupId) } },
+          { status: { in: ["new", "confirmed"] } },
+          { startsAt: { less_than: doc.endsAt } },
+          { endsAt: { greater_than: doc.startsAt } },
+        ],
+      },
+    })
+
+    const hasConflict = (conflictDocs.docs as any[]).some((conflict) => {
+      const conflictResIds: string[] = ((conflict.resources ?? []) as any[])
+        .map((r: any) => (typeof r === "object" ? String(r.id ?? "") : String(r)))
+        .filter(Boolean)
+      return docResIds.some((id) => conflictResIds.includes(id))
+    })
+
+    if (hasConflict) {
+      needsManualReview = true
+      console.error(
+        `[confirmGroupPayment] WYMAGA RĘCZNEJ OBSŁUGI: płatność po wygaśnięciu holda z konfliktem. sessionId=${sessionId} docId=${doc.id} type=${type} resIds=${docResIds.join(",")}`,
+      )
+      break
+    }
+  }
+
+  if (needsManualReview) {
+    const manualNote =
+      "Płatność przyszła po wygaśnięciu holda. Slot został zajęty przez inną rezerwację. Wymaga kontaktu z klientem."
+    for (const doc of docs) {
+      await payload
+        .update({
+          collection: "reservations",
+          id: doc.id,
+          data: { paymentStatus: "paid", internalNote: manualNote } as any,
+          overrideAccess: true,
+        })
+        .catch((err) => console.error("[confirmGroupPayment] Update (manual review) failed:", err))
+    }
+    console.error(
+      `[confirmGroupPayment] Rezerwacja NIE potwierdzona automatycznie — wymagana ręczna weryfikacja. sessionId=${sessionId}`,
+    )
+    return "ok"
+  }
+
   for (const doc of docs) {
     await payload
       .update({

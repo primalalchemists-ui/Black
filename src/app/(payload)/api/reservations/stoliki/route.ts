@@ -360,84 +360,108 @@ export async function POST(req: Request) {
     }
 
     const dayISO = dayISOFromDateOnly(dateOnly);
-
-    const existing = await payload.find({
-      collection: "reservations",
-      limit: 5000,
-      where: {
-        and: [
-          { type: { equals: "stolik" } },
-          { day: { equals: dayISO } },
-          { status: { in: ["new", "confirmed"] } },
-        ],
-      },
-    });
-
     const slotM = minutesFromHHMM(time);
 
-    const taken = takenSeatsInWindow(existing?.docs || [], slotM, blockDuration);
-    const remaining = Math.max(0, onlineSeatsLimit - taken);
-
-    if (partySize > remaining) {
+    // Advisory lock per dzień — zapobiega race condition na globalnym limicie miejsc
+    const lockKey = `stoliki|${dateOnly}`;
+    let lockClient: any = null;
+    try {
+      const dbPool = (payload.db as any)?.pool;
+      if (!dbPool?.connect) throw new Error("DB pool unavailable");
+      lockClient = await dbPool.connect();
+      await lockClient.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey]);
+    } catch (lockErr) {
+      console.error("[stoliki] advisory lock error:", lockErr);
+      if (lockClient) {
+        await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+        lockClient.release();
+      }
       return NextResponse.json(
-        { error: "NO_AVAILABILITY", issues: [issue(["partySize"], "Brak wystarczającej liczby miejsc na wybrany termin.")] },
-        { status: 409 }
+        { error: "SERVICE_UNAVAILABLE", message: "Nie udało się potwierdzić dostępności. Spróbuj ponownie za chwilę." },
+        { status: 503 }
       );
     }
 
-    // zapis
-    const { h, m } = parseHHMM(time);
-    const startHour = String(h);
-    const startMinute = String(m);
+    let reservationDoc: any = null;
+    let reservationNumber: string = "";
+    let groupId: string = "";
 
-    // startsAt/endsAt: blokada na blockDuration minut. Uwaga: to używa TZ serwera.
-    const startsAt = new Date(dateOnly + "T" + time + ":00");
-    const endsAt = new Date(startsAt);
-    endsAt.setMinutes(endsAt.getMinutes() + blockDuration);
-
-    const endHour = String(endsAt.getHours());
-    const endMinute = String(endsAt.getMinutes());
-
-    const reservationNumber = await getNextReservationNumber(payload, "S");
-    const groupId = crypto.randomUUID();
-
-    const reservationDoc = await payload.create({
-      collection: "reservations",
-      data: {
-        type: "stolik",
-        reservationNumber,
-        groupId,
-        customer: {
-          firstName: (data as any).firstName,
-          lastName: (data as any).lastName,
-          phone: (data as any).phone,
-          email: (data as any).email,
+    try {
+      // Świeże dane wewnątrz locka
+      const existing = await payload.find({
+        collection: "reservations",
+        limit: 5000,
+        where: {
+          and: [
+            { type: { equals: "stolik" } },
+            { day: { equals: dayISO } },
+            { status: { in: ["new", "confirmed"] } },
+          ],
         },
-        notes: (data as any).notes || "",
+      });
 
-        day: dayISO,
-        allDay: false,
-        startHour,
-        startMinute,
-        endHour,
-        endMinute,
+      const taken = takenSeatsInWindow(existing?.docs || [], slotM, blockDuration);
+      const remaining = Math.max(0, onlineSeatsLimit - taken);
 
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
+      if (partySize > remaining) {
+        return NextResponse.json(
+          { error: "NO_AVAILABILITY", issues: [issue(["partySize"], "Brak wystarczającej liczby miejsc na wybrany termin.")] },
+          { status: 409 }
+        );
+      }
 
-        partySize,
-        tablesCount: 1,
+      // zapis
+      const { h, m } = parseHHMM(time);
+      const startHour = String(h);
+      const startMinute = String(m);
 
-        invoice: { wantInvoice: (data as any).wantInvoice, nip: (data as any).nip || "" },
-        acceptRules: Boolean((data as any).acceptRules),
+      // startsAt/endsAt: blokada na blockDuration minut. Uwaga: to używa TZ serwera.
+      const startsAt = new Date(dateOnly + "T" + time + ":00");
+      const endsAt = new Date(startsAt);
+      endsAt.setMinutes(endsAt.getMinutes() + blockDuration);
 
-        source: "online",
-        status: "new",
-        paymentStatus: "not_required",
-      },
-    });
+      const endHour = String(endsAt.getHours());
+      const endMinute = String(endsAt.getMinutes());
 
-    // Wyślij maile (nie blokuj odpowiedzi przy błędzie)
+      reservationNumber = await getNextReservationNumber(payload, "S");
+      groupId = crypto.randomUUID();
+
+      reservationDoc = await payload.create({
+        collection: "reservations",
+        data: {
+          type: "stolik",
+          reservationNumber,
+          groupId,
+          customer: {
+            firstName: (data as any).firstName,
+            lastName: (data as any).lastName,
+            phone: (data as any).phone,
+            email: (data as any).email,
+          },
+          notes: (data as any).notes || "",
+          day: dayISO,
+          allDay: false,
+          startHour,
+          startMinute,
+          endHour,
+          endMinute,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+          partySize,
+          tablesCount: 1,
+          invoice: { wantInvoice: (data as any).wantInvoice, nip: (data as any).nip || "" },
+          acceptRules: Boolean((data as any).acceptRules),
+          source: "online",
+          status: "new",
+          paymentStatus: "not_required",
+        },
+      });
+    } finally {
+      await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]).catch(() => {});
+      lockClient.release();
+    }
+
+    // Wyślij maile (poza lockiem, nie blokuj odpowiedzi przy błędzie)
     try {
       const mail = getMailClient();
       const from = getMailFrom();

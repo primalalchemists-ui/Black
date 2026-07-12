@@ -288,6 +288,14 @@ export const Reservations: CollectionConfig = {
               { startsAt: { less_than: endsAt.toISOString() } },
               { endsAt: { greater_than: startsAt.toISOString() } },
               ...(idToIgnore ? [{ id: { not_equals: idToIgnore } }] : []),
+              // wyklucz wygasłe oczekujące na płatność
+              {
+                or: [
+                  { paymentStatus: { not_equals: "pending" } },
+                  { expiresAt: { exists: false } },
+                  { expiresAt: { greater_than_equal: now.toISOString() } },
+                ],
+              } as any,
             ],
           },
         });
@@ -424,7 +432,15 @@ export const Reservations: CollectionConfig = {
       ],
     },
 
-    { name: "notes", label: "Uwagi", type: "textarea" },
+    { name: "notes", label: "Uwagi (klient)", type: "textarea" },
+    {
+      name: "internalNote",
+      label: "Notatka wewnętrzna",
+      type: "textarea",
+      admin: {
+        description: "Widoczna tylko dla obsługi. Wypełniana automatycznie przy problemach z płatnością.",
+      },
+    },
 
     {
       name: "day",
@@ -497,6 +513,12 @@ export const Reservations: CollectionConfig = {
       label: "Koniec (timestamp)",
       type: "date",
       admin: { readOnly: true, hidden: true },
+    },
+    {
+      name: "expiresAt",
+      label: "Wygasa (timestamp)",
+      type: "date",
+      admin: { hidden: true },
     },
 
     // Stoliki

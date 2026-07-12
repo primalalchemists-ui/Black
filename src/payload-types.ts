@@ -216,12 +216,10 @@ export interface Reservation {
   endMinute?: ('0' | '15' | '30' | '45') | null;
   startsAt: string;
   endsAt?: string | null;
+  expiresAt?: string | null;
   partySize?: number | null;
   tablesCount?: number | null;
   resources?: (number | Resource)[] | null;
-  /**
-   * Szczegóły czasowe per zasób — generowane automatycznie przy rezerwacji online
-   */
   segments?:
     | {
         resource?: (number | null) | Resource;
@@ -743,6 +741,7 @@ export interface ReservationsSelect<T extends boolean = true> {
   endMinute?: T;
   startsAt?: T;
   endsAt?: T;
+  expiresAt?: T;
   partySize?: T;
   tablesCount?: T;
   resources?: T;

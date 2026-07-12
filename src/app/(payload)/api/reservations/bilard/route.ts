@@ -172,14 +172,15 @@ export async function GET(req: Request) {
   const dayEndISO = endOfDay(date).toISOString();
   const dayISO = dayISOFromDateOnly(date);
 
-  // ✅ FIX: filtruj po day (i fallback na stare rekordy bez day)
+  const nowISO = new Date().toISOString();
+
   const existing = await payload.find({
     collection: "reservations",
     limit: 2000,
     where: {
       and: [
         { type: { equals: "bilard" } },
-        { status: { in: ["new", "confirmed"] } }, // ✅ tylko blokujące UI
+        { status: { in: ["new", "confirmed"] } },
         {
           or: [
             { day: { equals: dayISO } },
@@ -197,6 +198,14 @@ export async function GET(req: Request) {
             },
           ],
         },
+        // wyklucz wygasłe oczekujące na płatność
+        {
+          or: [
+            { paymentStatus: { not_equals: "pending" } },
+            { expiresAt: { exists: false } },
+            { expiresAt: { greater_than_equal: nowISO } },
+          ],
+        } as any,
       ],
     },
   });
@@ -419,14 +428,10 @@ export async function POST(req: Request) {
 
     const pricePerHour = Number(s?.pricePerHour ?? 50);
 
-    const toCreate: Array<{
-      resourceNumber: number;
-      resourceId: string;
-      startsAt: Date;
-      endsAt: Date;
-      segmentPrice: number;
-    }> = [];
+    type SegItem = { resourceNumber: number; resourceId: string; startsAt: Date; endsAt: Date; segmentPrice: number };
+    const toCreate: SegItem[] = [];
 
+    // Pass 1: format + lead-time validation only (no conflict check yet)
     for (const seg of segs) {
       const resourceNumber = Number(seg.resource);
       const startHour = Number(seg.startHour);
@@ -457,140 +462,221 @@ export async function POST(req: Request) {
       }
 
       const resourceId = numToId.get(resourceNumber)!;
-
-      const blocked = (bRes.docs || []).some((b: any) => {
-        const ids = relIds(b.resources);
-        if (!ids.includes(resourceId)) return false;
-
-        const range = blackoutRange(data.date, b);
-        if (!range) return false;
-
-        return overlaps(range.s, range.e, startsAt, endsAt);
-      });
-
-      if (blocked) {
-        return NextResponse.json(
-          { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: `Zasób ${resourceNumber} jest zablokowany (blackout).` }] },
-          { status: 409 }
-        );
-      }
-
-      const busy = (existing.docs || []).some((r: any) => {
-        const rr = relIds(r.resources);
-        if (!rr.includes(resourceId)) return false;
-
-        const rSegs = Array.isArray(r.segments) ? r.segments as any[] : [];
-        if (rSegs.length > 0) {
-          return rSegs.some((seg: any) => {
-            const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""))
-            if (segResId !== resourceId) return false
-            const segStart = toDateAtHourMinute(data.date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0))
-            const segEnd = toDateAtHourMinute(data.date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0))
-            return overlaps(segStart, segEnd, startsAt, endsAt)
-          })
-        }
-
-        const rStart = new Date(r.startsAt);
-        const rEnd = r.endsAt ? new Date(r.endsAt) : endOfDay(data.date); // ✅ FIX
-        return overlaps(rStart, rEnd, startsAt, endsAt);
-      });
-
-      if (busy) {
-        return NextResponse.json(
-          { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: `Zasób ${resourceNumber} jest już zajęty.` }] },
-          { status: 409 }
-        );
-      }
-
       const hours = (endsAt.getTime() - startsAt.getTime()) / (1000 * 60 * 60);
-      const segmentPrice = hours * pricePerHour;
-
-      toCreate.push({ resourceNumber, resourceId, startsAt, endsAt, segmentPrice });
+      toCreate.push({ resourceNumber, resourceId, startsAt, endsAt, segmentPrice: hours * pricePerHour });
     }
 
     const groupId = (globalThis.crypto as any)?.randomUUID?.() ?? String(Date.now());
     const amountToPay = toCreate.reduce((acc, x) => acc + x.segmentPrice, 0);
     const amountGrosze = Math.round(amountToPay * 100);
 
-    // Jeden numer rezerwacji na całą grupę (wszystkie stoły = jedna rezerwacja klienta)
-    const groupReservationNumber = await getNextReservationNumber(payload, "B");
+    // Advisory lock per resource+day — sortujemy resourceId ASC żeby uniknąć deadlocków
+    const sortedResourceIds = [...new Set(toCreate.map(s => s.resourceId))].sort();
+    let lockClient: any = null;
+    const acquiredLockKeys: string[] = [];
+    try {
+      const dbPool = (payload.db as any)?.pool;
+      if (!dbPool?.connect) throw new Error("DB pool unavailable");
+      lockClient = await dbPool.connect();
+      for (const resourceId of sortedResourceIds) {
+        const lk = `bilard|${data.date}|resource:${resourceId}`;
+        await lockClient.query(`SELECT pg_advisory_lock(hashtext($1))`, [lk]);
+        acquiredLockKeys.push(lk);
+      }
+    } catch (lockErr) {
+      console.error("[bilard] advisory lock error:", lockErr);
+      if (lockClient) {
+        for (const k of acquiredLockKeys) {
+          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [k]).catch(() => {});
+        }
+        lockClient.release();
+      }
+      return NextResponse.json(
+        { error: "SERVICE_UNAVAILABLE", message: "Nie udało się potwierdzić dostępności. Spróbuj ponownie za chwilę." },
+        { status: 503 }
+      );
+    }
 
-    // Rejestracja transakcji P24 PRZED zapisem do bazy
-    let p24PayUrl: string | null = null;
-    if (amountGrosze > 0) {
-      try {
-        const { payUrl } = await registerTransaction({
-          sessionId: groupId,
-          amount: amountGrosze,
-          description: `Rezerwacja ${groupReservationNumber}`,
-          email: data.email,
+    try {
+      // Pass 2: fresh conflict check inside lock
+      const [bResLocked, existingLocked] = await Promise.all([
+        payload.find({
+          collection: "blackouts",
+          limit: 500,
+          where: {
+            and: [
+              { active: { equals: true } },
+              { service: { equals: service } },
+              { day: { greater_than_equal: startOfDay(data.date).toISOString() } },
+              { day: { less_than_equal: endOfDay(data.date).toISOString() } },
+            ],
+          },
+        }),
+        payload.find({
+          collection: "reservations",
+          limit: 2000,
+          where: {
+            and: [
+              { type: { equals: "bilard" } },
+              { status: { in: ["new", "confirmed"] } },
+              {
+                or: [
+                  { day: { equals: dayISO } },
+                  {
+                    and: [
+                      { day: { exists: false } },
+                      { startsAt: { less_than: dayEndISO } },
+                      { or: [{ endsAt: { exists: false } }, { endsAt: { greater_than: dayStartISO } }] },
+                    ],
+                  },
+                ],
+              },
+              // wyklucz wygasłe oczekujące na płatność
+              {
+                or: [
+                  { paymentStatus: { not_equals: "pending" } },
+                  { expiresAt: { exists: false } },
+                  { expiresAt: { greater_than_equal: new Date().toISOString() } },
+                ],
+              } as any,
+            ],
+          },
+        }),
+      ]);
+
+      for (const item of toCreate) {
+        const { resourceNumber, resourceId, startsAt, endsAt } = item;
+
+        const blocked = (bResLocked.docs || []).some((b: any) => {
+          const ids = relIds(b.resources);
+          if (!ids.includes(resourceId)) return false;
+          const range = blackoutRange(data.date, b);
+          if (!range) return false;
+          return overlaps(range.s, range.e, startsAt, endsAt);
         });
-        p24PayUrl = payUrl;
-      } catch (err) {
-        console.error("[bilard] P24 register error:", err);
-        return NextResponse.json(
-          { error: "PAYMENT_ERROR", message: CONTACT_MSG },
-          { status: 502 }
-        );
+
+        if (blocked) {
+          return NextResponse.json(
+            { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: `Zasób ${resourceNumber} jest zablokowany (blackout).` }] },
+            { status: 409 }
+          );
+        }
+
+        const busy = (existingLocked.docs || []).some((r: any) => {
+          const rr = relIds(r.resources);
+          if (!rr.includes(resourceId)) return false;
+          const rSegs = Array.isArray(r.segments) ? r.segments as any[] : [];
+          if (rSegs.length > 0) {
+            return rSegs.some((seg: any) => {
+              const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""));
+              if (segResId !== resourceId) return false;
+              const segStart = toDateAtHourMinute(data.date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0));
+              const segEnd = toDateAtHourMinute(data.date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0));
+              return overlaps(segStart, segEnd, startsAt, endsAt);
+            });
+          }
+          const rStart = new Date(r.startsAt);
+          const rEnd = r.endsAt ? new Date(r.endsAt) : endOfDay(data.date);
+          return overlaps(rStart, rEnd, startsAt, endsAt);
+        });
+
+        if (busy) {
+          return NextResponse.json(
+            { error: "NO_AVAILABILITY", issues: [{ path: ["segments"], message: `Zasób ${resourceNumber} jest już zajęty.` }] },
+            { status: 409 }
+          );
+        }
+      }
+
+      // Numer rezerwacji i rekord w bazie — PRZED P24
+      const groupReservationNumber = await getNextReservationNumber(payload, "B");
+
+      const dayISO2 = startOfLocalDayISO(toCreate[0].startsAt);
+      const allResourceIds = toCreate.map(s => s.resourceId);
+      const minStartsAt = toCreate.reduce((min, s) => s.startsAt < min ? s.startsAt : min, toCreate[0].startsAt);
+      const maxEndsAt = toCreate.reduce((max, s) => s.endsAt > max ? s.endsAt : max, toCreate[0].endsAt);
+
+      const segmentsData = toCreate.map(seg => ({
+        resource: seg.resourceId,
+        startHour: seg.startsAt.getHours(),
+        startMinute: seg.startsAt.getMinutes(),
+        endHour: seg.endsAt.getHours(),
+        endMinute: seg.endsAt.getMinutes(),
+        price: seg.segmentPrice,
+      }));
+
+      const createdDoc = await payload.create({
+        collection: "reservations",
+        data: {
+          type: "bilard",
+          day: dayISO2,
+          groupId,
+          reservationNumber: groupReservationNumber,
+          customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
+          notes: data.notes || "",
+          startsAt: minStartsAt.toISOString(),
+          endsAt: maxEndsAt.toISOString(),
+          startHour: minStartsAt.getHours(),
+          startMinute: minStartsAt.getMinutes(),
+          endHour: maxEndsAt.getHours(),
+          endMinute: maxEndsAt.getMinutes(),
+          resources: allResourceIds,
+          segments: segmentsData,
+          invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
+          acceptRules: data.acceptRules,
+          source: "online",
+          status: "new",
+          depositRequired: amountToPay > 0,
+          depositAmount: amountToPay,
+          paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
+          paymentProvider: amountGrosze > 0 ? "p24" : undefined,
+          expiresAt: amountGrosze > 0 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined,
+        } as any,
+      });
+
+      // P24 po zapisie — przy błędzie usuwamy rezerwację (brak osieroconych rekordów)
+      let p24PayUrl: string | null = null;
+      if (amountGrosze > 0) {
+        try {
+          const { payUrl } = await registerTransaction({
+            sessionId: groupId,
+            amount: amountGrosze,
+            description: `Rezerwacja ${groupReservationNumber}`,
+            email: data.email,
+          });
+          p24PayUrl = payUrl;
+        } catch (p24Err) {
+          console.error("[bilard] P24 error, anulowanie rezerwacji:", p24Err);
+          try {
+            await payload.delete({ collection: "reservations", id: createdDoc.id, overrideAccess: true });
+          } catch (deleteErr) {
+            console.error("[bilard] rollback delete failed, oznaczam jako anulowane:", deleteErr);
+            await payload.update({
+              collection: "reservations",
+              id: createdDoc.id,
+              overrideAccess: true,
+              data: { status: "cancelled", paymentStatus: "failed" } as any,
+            }).catch((e) => console.error("[bilard] rollback update also failed:", e));
+          }
+          return NextResponse.json({ error: "PAYMENT_ERROR", message: CONTACT_MSG }, { status: 502 });
+        }
+      }
+
+      console.log(`[bilard] reservation=${createdDoc.id} p24PayUrl=${p24PayUrl} groupId=${groupId}`);
+
+      if (p24PayUrl) {
+        return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });
+      }
+      return NextResponse.json({ ok: true, groupId, reservationIds: [createdDoc.id], amountToPay });
+
+    } finally {
+      if (lockClient) {
+        for (const k of acquiredLockKeys) {
+          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [k]).catch(() => {});
+        }
+        lockClient.release();
       }
     }
-
-    console.log(`[bilard] P24 payUrl=${p24PayUrl} groupId=${groupId}`)
-
-    // Jeden rekord dla całej rezerwacji, segmenty per stół wewnątrz
-    const dayISO2 = startOfLocalDayISO(toCreate[0].startsAt)
-    const allResourceIds = toCreate.map(s => s.resourceId)
-    const minStartsAt = toCreate.reduce((min, s) => s.startsAt < min ? s.startsAt : min, toCreate[0].startsAt)
-    const maxEndsAt = toCreate.reduce((max, s) => s.endsAt > max ? s.endsAt : max, toCreate[0].endsAt)
-
-    const segmentsData = toCreate.map(seg => ({
-      resource: seg.resourceId,
-      startHour: seg.startsAt.getHours(),
-      startMinute: seg.startsAt.getMinutes(),
-      endHour: seg.endsAt.getHours(),
-      endMinute: seg.endsAt.getMinutes(),
-      price: seg.segmentPrice,
-    }))
-
-    const createdDoc = await payload.create({
-      collection: "reservations",
-      data: {
-        type: "bilard",
-        day: dayISO2,
-        groupId,
-        reservationNumber: groupReservationNumber,
-
-        customer: { firstName: data.firstName, lastName: data.lastName, phone: data.phone, email: data.email },
-        notes: data.notes || "",
-
-        startsAt: minStartsAt.toISOString(),
-        endsAt: maxEndsAt.toISOString(),
-
-        startHour: minStartsAt.getHours(),
-        startMinute: minStartsAt.getMinutes(),
-        endHour: maxEndsAt.getHours(),
-        endMinute: maxEndsAt.getMinutes(),
-
-        resources: allResourceIds,
-        segments: segmentsData,
-        invoice: { wantInvoice: data.wantInvoice, invoiceType: (data as any).invoiceType || undefined, nip: data.nip || "" },
-        acceptRules: data.acceptRules,
-
-        source: "online",
-        status: "new",
-
-        depositRequired: amountToPay > 0,
-        depositAmount: amountToPay,
-        paymentStatus: amountGrosze > 0 ? "pending" : "not_required",
-        paymentProvider: amountGrosze > 0 ? "p24" : undefined,
-      } as any,
-    })
-
-    if (p24PayUrl) {
-      return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });
-    }
-
-    return NextResponse.json({ ok: true, groupId, reservationIds: [createdDoc.id], amountToPay });
   }
 
   // STARE FLOW

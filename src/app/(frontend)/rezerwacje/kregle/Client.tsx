@@ -50,7 +50,8 @@ export default function RezerwacjeKreglePage() {
   const [gridReady, setGridReady] = useState(false);
   const [gridEnabled, setGridEnabled] = useState(true);
   const [gridDisabledMsg, setGridDisabledMsg] = useState<string | null>(null);
-
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [gridRefreshKey, setGridRefreshKey] = useState(0);
 
   const [day, setDay] = useState<string>(() => {
     const d = new Date();
@@ -189,8 +190,15 @@ export default function RezerwacjeKreglePage() {
           return;
         }
 
+        if (parsed?.error === "NO_AVAILABILITY" || res.status === 409) {
+          setConflictMessage("Wybrane tory nie są już dostępne. Odświeżyliśmy dostępność — wybierz inny termin lub tor.");
+          setGridRefreshKey((k) => k + 1);
+          setGrid({ startHour: null, endHour: null, resources: [], totalHours: 0, totalPrice: 0, segments: [] });
+          setStep(1);
+          return;
+        }
+
         const ERROR_PL: Record<string, string> = {
-          NO_AVAILABILITY: "Brak dostępności na wybrany termin. Wybierz inny czas lub tor.",
           VENUE_BLOCKED: "Brak możliwości rezerwacji — lokal zarezerwowany na wydarzenie.",
           RESERVATIONS_DISABLED: "Rezerwacje są chwilowo wyłączone.",
           PAST_TIME: "Nie można rezerwować godzin, które już minęły.",
@@ -241,10 +249,17 @@ export default function RezerwacjeKreglePage() {
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="grid gap-2">
-              <WeekDateCards value={day} onChange={setDay} />
+              <WeekDateCards value={day} onChange={(d) => { setDay(d); setConflictMessage(null); }} />
             </div>
 
+            {conflictMessage ? (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                {conflictMessage}
+              </div>
+            ) : null}
+
             <ResourceGrid
+              key={gridRefreshKey}
               type="kregle"
               date={day}
               resourceLabel="Tor"
@@ -252,7 +267,7 @@ export default function RezerwacjeKreglePage() {
               pricePerHour={cfg?.pricePerHour ?? 120}
               startHour={cfg?.startHour ?? 16}
               endHour={cfg?.endHour ?? 22}
-              onChange={(v) => setGrid(v as any)}
+              onChange={(v) => { setGrid(v as any); setConflictMessage(null); }}
               onLoadingChange={({ ready }) => setGridReady(ready)}
               onEnabledChange={({ enabled, disabledMessage }) => {
                 setGridEnabled(enabled);

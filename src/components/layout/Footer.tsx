@@ -14,75 +14,75 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
   return (
     <footer className="w-full">
       <div className="max-w-[1200px] mx-auto px-4 md:px-0">
-        {/* Mobile: P24 + BLIK w jednej linii, pod spodem EU na ich szerokość */}
-        <div className="border-t pt-5 pb-3 md:hidden">
-          <div className="inline-flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <div className="relative h-[36px] w-[90px] shrink-0">
-                <Image
-                  src="/images/logo/Przelewy24_logo.png"
-                  alt="Przelewy24"
-                  fill
-                  className="object-contain object-left"
-                />
-              </div>
-              <div className="relative h-[22px] w-[46px] shrink-0">
-                <Image
-                  src="/images/logo/blik-logo.svg"
-                  alt="BLIK"
-                  fill
-                  className="object-contain object-left"
-                />
-              </div>
+        {/* Mobile: P24 + BLIK w jednej linii, pod spodem EU na całą szerokość */}
+        <div className="border-t pt-5 pb-3 md:hidden flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div className="relative h-[36px] w-[90px] shrink-0">
+              <Image
+                src="/images/logo/Przelewy24_logo.png"
+                alt="Przelewy24"
+                fill
+                className="object-contain object-left"
+              />
             </div>
-            <a
-              href="/dofinansowanie"
-              aria-label="Informacja o dofinansowaniu"
-              className="block focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <div className="relative w-full h-[46px]">
-                <Image
-                  src="/images/logo/logotyp-unia.png"
-                  alt="Logotyp Funduszy Europejskich i NextGenerationEU"
-                  fill
-                  className="object-contain object-left"
-                />
-              </div>
-            </a>
-          </div>
-        </div>
-
-        {/* Desktop: P24 | EU (flex-1) | BLIK */}
-        <div className="border-t pt-5 pb-3 hidden md:flex items-center gap-2">
-          <div className="relative h-[44px] w-[110px] shrink-0">
-            <Image
-              src="/images/logo/Przelewy24_logo.png"
-              alt="Przelewy24"
-              fill
-              className="object-contain object-left"
-            />
+            <div className="relative h-[22px] w-[46px] shrink-0">
+              <Image
+                src="/images/logo/blik-logo.svg"
+                alt="BLIK"
+                fill
+                className="object-contain object-left"
+              />
+            </div>
           </div>
           <a
             href="/dofinansowanie"
             aria-label="Informacja o dofinansowaniu"
-            className="flex-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="block focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
-            <div className="relative w-full h-[56px]">
+            <div className="relative w-full h-[46px]">
               <Image
                 src="/images/logo/logotyp-unia.png"
                 alt="Logotyp Funduszy Europejskich i NextGenerationEU"
                 fill
-                className="object-contain object-center"
+                className="object-contain object-left"
               />
             </div>
           </a>
-          <div className="relative h-[26px] w-[56px] shrink-0">
-            <Image
-              src="/images/logo/blik-logo.svg"
-              alt="BLIK"
-              fill
-              className="object-contain object-right"
-            />
+        </div>
+
+        {/* Desktop: P24 + EU + BLIK zgrupowane w centrum */}
+        <div className="border-t pt-5 pb-3 hidden md:flex justify-center">
+          <div className="flex items-center gap-3">
+            <div className="relative h-[44px] w-[110px] shrink-0">
+              <Image
+                src="/images/logo/Przelewy24_logo.png"
+                alt="Przelewy24"
+                fill
+                className="object-contain object-left"
+              />
+            </div>
+            <a
+              href="/dofinansowanie"
+              aria-label="Informacja o dofinansowaniu"
+              className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <div className="relative h-[56px] w-[420px]">
+                <Image
+                  src="/images/logo/logotyp-unia.png"
+                  alt="Logotyp Funduszy Europejskich i NextGenerationEU"
+                  fill
+                  className="object-contain object-center"
+                />
+              </div>
+            </a>
+            <div className="relative h-[26px] w-[56px] shrink-0">
+              <Image
+                src="/images/logo/blik-logo.svg"
+                alt="BLIK"
+                fill
+                className="object-contain object-left"
+              />
+            </div>
           </div>
         </div>
 
