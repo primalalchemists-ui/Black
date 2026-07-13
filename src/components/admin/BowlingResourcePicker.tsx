@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
-import { useFormFields, useAuth, useDocumentInfo } from "@payloadcms/ui"
+import { useFormFields, useField, useAuth, useDocumentInfo } from "@payloadcms/ui"
 
 type Resource = { id: string | number; number: number; label?: string | null }
 
@@ -25,6 +25,12 @@ export function BowlingResourcePicker() {
     fields.type?.value as string | undefined,
     d,
   ] as const)
+
+  // useField properly registers in form state + triggers dirty/save button
+  const { setValue: setFormStartHour } = useField<string>({ path: "startHour" })
+  const { setValue: setFormStartMinute } = useField<string>({ path: "startMinute" })
+  const { setValue: setFormEndHour } = useField<string>({ path: "endHour" })
+  const { setValue: setFormEndMinute } = useField<string>({ path: "endMinute" })
 
   const resourceType = typeVal === "kregle" ? "lane" : typeVal === "bilard" ? "billiard" : null
 
@@ -64,13 +70,13 @@ export function BowlingResourcePicker() {
   }, [resourceType, token])
 
   // Initialize state once resources are loaded.
-  // In edit mode: fetch the document to read existing segments.
+  // In edit mode: fetch the document from the API to read existing segments.
   // In create mode: start empty.
   useEffect(() => {
     if (allResources.length === 0 || !token || initDoneRef.current) return
     initDoneRef.current = true
 
-    if (!docId) return // Create mode
+    if (!docId) return // Create mode — empty state
 
     fetch(`/api/reservations/${docId}?depth=0`, {
       headers: { Authorization: `JWT ${token}` },
@@ -106,32 +112,34 @@ export function BowlingResourcePicker() {
         setSelectedIds(newSelected)
         setTimes(newTimes)
 
-        // Dispatch to simple top-level fields (not array segments — array dispatch unreliable in Payload v3)
+        // Sync initial values into form state via useField
         const arr = [...newSelected]
-        const firstTime = arr[0] ? (newTimes.get(arr[0]) ?? DEFAULT_TIME) : DEFAULT_TIME
         ;(dispatch as any)({ type: "UPDATE", path: "resources", value: arr, valid: arr.length > 0 })
-        ;(dispatch as any)({ type: "UPDATE", path: "startHour", value: firstTime.startHour, valid: true })
-        ;(dispatch as any)({ type: "UPDATE", path: "startMinute", value: "0", valid: true })
-        ;(dispatch as any)({ type: "UPDATE", path: "endHour", value: firstTime.endHour, valid: true })
-        ;(dispatch as any)({ type: "UPDATE", path: "endMinute", value: "0", valid: true })
+        if (arr.length > 0) {
+          const t = newTimes.get(arr[0]) ?? DEFAULT_TIME
+          setFormStartHour(t.startHour)
+          setFormStartMinute("0")
+          setFormEndHour(t.endHour)
+          setFormEndMinute("0")
+        }
       })
       .catch(() => {})
-  }, [allResources, docId, token, dispatch])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allResources, docId, token])
 
-  // Dispatch resources + time to top-level form fields.
-  // beforeValidate on server regenerates segments from these.
+  // Update form state: resources via dispatch, time fields via useField (triggers dirty state)
   const dispatchAll = useCallback(
     (nextSelected: Set<string>, nextTimes: Map<string, ResourceTime>) => {
       const arr = [...nextSelected]
       ;(dispatch as any)({ type: "UPDATE", path: "resources", value: arr, valid: arr.length > 0 })
       const firstId = arr[0]
       const t = firstId ? (nextTimes.get(firstId) ?? DEFAULT_TIME) : DEFAULT_TIME
-      ;(dispatch as any)({ type: "UPDATE", path: "startHour", value: t.startHour, valid: true })
-      ;(dispatch as any)({ type: "UPDATE", path: "startMinute", value: "0", valid: true })
-      ;(dispatch as any)({ type: "UPDATE", path: "endHour", value: t.endHour, valid: t.endHour !== "" })
-      ;(dispatch as any)({ type: "UPDATE", path: "endMinute", value: "0", valid: true })
+      setFormStartHour(t.startHour)
+      setFormStartMinute("0")
+      setFormEndHour(t.endHour)
+      setFormEndMinute("0")
     },
-    [dispatch],
+    [dispatch, setFormStartHour, setFormStartMinute, setFormEndHour, setFormEndMinute],
   )
 
   const handleToggle = useCallback(
@@ -143,7 +151,6 @@ export function BowlingResourcePicker() {
       } else {
         next.add(id)
         if (!times.has(id)) {
-          // New resource gets same time as the first already-selected one
           const firstId = [...selectedIds][0]
           const refTime = firstId ? (times.get(firstId) ?? DEFAULT_TIME) : DEFAULT_TIME
           nextTimes = new Map(times)
@@ -159,7 +166,7 @@ export function BowlingResourcePicker() {
 
   const handleTimeChange = useCallback(
     (resourceId: string, field: keyof ResourceTime, value: string) => {
-      // Sync all selected resources to the same time — venue booking always uses same hours
+      // Sync all selected resources to the same time
       const nextTimes = new Map(times)
       for (const id of selectedIds) {
         const existing = nextTimes.get(id) ?? { ...DEFAULT_TIME }
