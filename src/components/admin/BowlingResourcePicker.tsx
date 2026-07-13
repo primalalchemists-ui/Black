@@ -33,9 +33,7 @@ export function BowlingResourcePicker() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [times, setTimes] = useState<Map<string, ResourceTime>>(new Map())
 
-  // Track current type so we can reset on change
   const prevTypeRef = useRef<string | undefined>(typeVal)
-  // Track that init already ran for this type+doc combination
   const initDoneRef = useRef(false)
 
   // Reset state when reservation type changes
@@ -66,18 +64,14 @@ export function BowlingResourcePicker() {
   }, [resourceType, token])
 
   // Initialize state once resources are loaded.
-  // In edit mode: fetch the document from the API to read existing segments.
+  // In edit mode: fetch the document to read existing segments.
   // In create mode: start empty.
   useEffect(() => {
     if (allResources.length === 0 || !token || initDoneRef.current) return
     initDoneRef.current = true
 
-    if (!docId) {
-      // Create mode — empty state, user selects via toggles
-      return
-    }
+    if (!docId) return // Create mode
 
-    // Edit mode — fetch existing document at depth=0 (IDs only)
     fetch(`/api/reservations/${docId}?depth=0`, {
       headers: { Authorization: `JWT ${token}` },
     })
@@ -111,28 +105,31 @@ export function BowlingResourcePicker() {
 
         setSelectedIds(newSelected)
         setTimes(newTimes)
-      })
-      .catch(() => {
-        // On error, stay with empty state
-      })
-  }, [allResources, docId, token])
 
-  const dispatchBoth = useCallback(
+        // Dispatch to simple top-level fields (not array segments — array dispatch unreliable in Payload v3)
+        const arr = [...newSelected]
+        const firstTime = arr[0] ? (newTimes.get(arr[0]) ?? DEFAULT_TIME) : DEFAULT_TIME
+        ;(dispatch as any)({ type: "UPDATE", path: "resources", value: arr, valid: arr.length > 0 })
+        ;(dispatch as any)({ type: "UPDATE", path: "startHour", value: firstTime.startHour, valid: true })
+        ;(dispatch as any)({ type: "UPDATE", path: "startMinute", value: "0", valid: true })
+        ;(dispatch as any)({ type: "UPDATE", path: "endHour", value: firstTime.endHour, valid: true })
+        ;(dispatch as any)({ type: "UPDATE", path: "endMinute", value: "0", valid: true })
+      })
+      .catch(() => {})
+  }, [allResources, docId, token, dispatch])
+
+  // Dispatch resources + time to top-level form fields.
+  // beforeValidate on server regenerates segments from these.
+  const dispatchAll = useCallback(
     (nextSelected: Set<string>, nextTimes: Map<string, ResourceTime>) => {
       const arr = [...nextSelected]
       ;(dispatch as any)({ type: "UPDATE", path: "resources", value: arr, valid: arr.length > 0 })
-      const segments = arr.map((resId) => {
-        const t = nextTimes.get(resId) ?? DEFAULT_TIME
-        return {
-          resource: resId,
-          startHour: Number(t.startHour),
-          startMinute: 0,
-          endHour: Number(t.endHour),
-          endMinute: 0,
-          price: 0,
-        }
-      })
-      ;(dispatch as any)({ type: "UPDATE", path: "segments", value: segments, valid: true })
+      const firstId = arr[0]
+      const t = firstId ? (nextTimes.get(firstId) ?? DEFAULT_TIME) : DEFAULT_TIME
+      ;(dispatch as any)({ type: "UPDATE", path: "startHour", value: t.startHour, valid: true })
+      ;(dispatch as any)({ type: "UPDATE", path: "startMinute", value: "0", valid: true })
+      ;(dispatch as any)({ type: "UPDATE", path: "endHour", value: t.endHour, valid: t.endHour !== "" })
+      ;(dispatch as any)({ type: "UPDATE", path: "endMinute", value: "0", valid: true })
     },
     [dispatch],
   )
@@ -146,26 +143,32 @@ export function BowlingResourcePicker() {
       } else {
         next.add(id)
         if (!times.has(id)) {
+          // New resource gets same time as the first already-selected one
+          const firstId = [...selectedIds][0]
+          const refTime = firstId ? (times.get(firstId) ?? DEFAULT_TIME) : DEFAULT_TIME
           nextTimes = new Map(times)
-          nextTimes.set(id, { ...DEFAULT_TIME })
+          nextTimes.set(id, { ...refTime })
           setTimes(nextTimes)
         }
       }
       setSelectedIds(next)
-      dispatchBoth(next, nextTimes)
+      dispatchAll(next, nextTimes)
     },
-    [selectedIds, times, dispatchBoth],
+    [selectedIds, times, dispatchAll],
   )
 
   const handleTimeChange = useCallback(
     (resourceId: string, field: keyof ResourceTime, value: string) => {
+      // Sync all selected resources to the same time — venue booking always uses same hours
       const nextTimes = new Map(times)
-      const existing = nextTimes.get(resourceId) ?? { ...DEFAULT_TIME }
-      nextTimes.set(resourceId, { ...existing, [field]: value })
+      for (const id of selectedIds) {
+        const existing = nextTimes.get(id) ?? { ...DEFAULT_TIME }
+        nextTimes.set(id, { ...existing, [field]: value })
+      }
       setTimes(nextTimes)
-      dispatchBoth(selectedIds, nextTimes)
+      dispatchAll(selectedIds, nextTimes)
     },
-    [times, selectedIds, dispatchBoth],
+    [times, selectedIds, dispatchAll],
   )
 
   if (!resourceType) return null

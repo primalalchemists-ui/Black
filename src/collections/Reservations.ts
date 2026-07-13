@@ -166,72 +166,40 @@ export const Reservations: CollectionConfig = {
         }
 
         // ===== AUTO-GENERACJA SEGMENTÓW Z PANELU ADMINA =====
-        // Dla rezerwacji przez panel (req.user istnieje) sprawdzamy czy BowlingResourcePicker
-        // już ustawił segmenty z per-zasób godzinami. Jeśli tak — zostawiamy je i obliczamy
-        // startsAt/endsAt z min/max segmentów. Jeśli nie — generujemy z top-level pól (fallback).
-        // Dla rezerwacji online (brak req.user) segments przychodzą gotowe z route.
+        // Dla rezerwacji przez panel (req.user istnieje): zawsze regeneruj segmenty
+        // z top-level pól startHour/endHour + resources. startsAt/endsAt już obliczone
+        // przez blok powyżej.
+        // Dla rezerwacji online (brak req.user): segments przychodzą gotowe z route,
+        // startsAt/endsAt też ustawione przez route — nie ingerujemy.
         if (req?.user && (type === "kregle" || type === "bilard")) {
-          const existingSegments = Array.isArray((data as any).segments)
-            ? ((data as any).segments as any[])
+          const rawResources = (data as any).resources;
+          const resources = Array.isArray(rawResources)
+            ? (rawResources as any[])
+                .map((x: any) => {
+                  if (!x) return null;
+                  if (typeof x === "string" || typeof x === "number") return String(x);
+                  if (x?.id != null) return String(x.id);
+                  if (x?.value != null) return String(x.value);
+                  return null;
+                })
+                .filter(Boolean) as string[]
             : [];
-          const hasPerResourceSegments =
-            existingSegments.length > 0 && existingSegments[0]?.resource != null;
 
-          if (hasPerResourceSegments) {
-            // Segmenty ustawione przez BowlingResourcePicker — oblicz startsAt/endsAt z min/max
-            if ((data as any).day) {
-              const day = (data as any).day;
-              const startTotals = existingSegments.map(
-                (s: any) => Number(s.startHour ?? 0) * 60 + Number(s.startMinute ?? 0),
-              );
-              const endTotals = existingSegments.map(
-                (s: any) => Number(s.endHour ?? 0) * 60 + Number(s.endMinute ?? 0),
-              );
-              const minStart = Math.min(...startTotals);
-              const maxEnd = Math.max(...endTotals);
-              (data as any).startsAt = buildDateTimeFromDayHourMinuteUTC(
-                day,
-                String(Math.floor(minStart / 60)),
-                String(minStart % 60),
-              );
-              (data as any).endsAt = buildDateTimeFromDayHourMinuteUTC(
-                day,
-                String(Math.floor(maxEnd / 60)),
-                String(maxEnd % 60),
-              );
-            }
-            // Segmenty zostawiamy bez zmian
-          } else {
-            // Brak segmentów od komponentu — generuj z top-level pól (stare zachowanie)
-            const rawResources = (data as any).resources;
-            const resources = Array.isArray(rawResources)
-              ? (rawResources as any[])
-                  .map((x: any) => {
-                    if (!x) return null;
-                    if (typeof x === "string" || typeof x === "number") return String(x);
-                    if (x?.id != null) return String(x.id);
-                    if (x?.value != null) return String(x.value);
-                    return null;
-                  })
-                  .filter(Boolean) as string[]
-              : [];
+          if (resources.length > 0) {
+            const sH = Number((data as any).startHour ?? 0);
+            const sM = Number((data as any).startMinute ?? 0);
+            const eH = Number((data as any).endHour ?? 0);
+            const eM = Number((data as any).endMinute ?? 0);
 
-            if (resources.length > 0) {
-              const sH = Number((data as any).startHour ?? 0);
-              const sM = Number((data as any).startMinute ?? 0);
-              const eH = Number((data as any).endHour ?? 0);
-              const eM = Number((data as any).endMinute ?? 0);
-
-              if (Number.isFinite(sH) && Number.isFinite(eH)) {
-                (data as any).segments = resources.map((resourceId: string) => ({
-                  resource: resourceId,
-                  startHour: sH,
-                  startMinute: sM,
-                  endHour: eH,
-                  endMinute: eM,
-                  price: 0,
-                }));
-              }
+            if (Number.isFinite(sH) && Number.isFinite(eH)) {
+              (data as any).segments = resources.map((resourceId: string) => ({
+                resource: resourceId,
+                startHour: sH,
+                startMinute: sM,
+                endHour: eH,
+                endMinute: eM,
+                price: 0,
+              }));
             }
           }
         }
