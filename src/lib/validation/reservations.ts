@@ -138,7 +138,12 @@ export const businessSchema = z
 
 export const imprezaSchema = z.object({
   eventId: z.string().min(1, "Wybierz imprezę"),
-  partySize: z.number({ invalid_type_error: "Podaj liczbę osób" }).int().min(1, "Minimalna liczba osób: 1"),
+  partySize: z.preprocess(
+    (v) => (typeof v === "number" && Number.isNaN(v) ? undefined : v),
+    z.number({ required_error: "Podaj liczbę osób", invalid_type_error: "Podaj liczbę osób" })
+      .int()
+      .min(1, "Minimalna liczba osób: 1"),
+  ),
 });
 
 /** request schemas
