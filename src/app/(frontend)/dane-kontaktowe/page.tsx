@@ -49,10 +49,10 @@ export default function DaneKontaktowePage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Telefon</p>
                 <a
-                  href="tel:+48691246975"
+                  href="tel:+48601275261"
                   className="text-sm text-foreground transition-colors hover:text-[hsl(var(--brand))]"
                 >
-                  691 246 975
+                  601 275 261
                 </a>
               </div>
             </div>

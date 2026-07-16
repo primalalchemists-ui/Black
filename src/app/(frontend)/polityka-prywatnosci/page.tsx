@@ -79,7 +79,7 @@ export default async function PolitykaPrywatnosciPage() {
                     blackplatnosci@gmail.com
                   </a>
                 </p>
-                <p>Tel: 691 246 975</p>
+                <p>Tel: 601 275 261</p>
               </div>
             </div>
             <p className="mt-3 text-foreground/80">Administrator nie powołał Inspektora Ochrony Danych.</p>

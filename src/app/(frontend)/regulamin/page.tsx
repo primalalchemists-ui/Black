@@ -51,7 +51,7 @@ export default async function RegulaminPage() {
           <div className="mt-2 space-y-0.5 text-muted-foreground">
             <p>Sieradzka 28A, 98-300 Wieluń</p>
             <p>NIP: 8321002917</p>
-            <p>Tel: 691 246 975</p>
+            <p>Tel: 601 275 261</p>
             <p>
               E-mail:{" "}
               <a href="mailto:blackplatnosci@gmail.com" className="underline hover:text-foreground">
