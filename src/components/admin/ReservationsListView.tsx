@@ -113,10 +113,7 @@ function buildApiUrl(
   if (from)                    { params.set(`where[and][${a}][day][greater_than_equal]`, from); a++ }
   if (to)                      { params.set(`where[and][${a}][day][less_than_equal]`, to); a++ }
   if (statusFilter !== "all")  { params.set(`where[and][${a}][status][equals]`, statusFilter); a++ }
-  if (paymentFilter === "all") {
-    // Default: hide pending (incomplete payment) — show only confirmed/settled reservations
-    params.set(`where[and][${a}][paymentStatus][not_equals]`, "pending"); a++
-  } else {
+  if (paymentFilter !== "all") {
     params.set(`where[and][${a}][paymentStatus][equals]`, paymentFilter); a++
   }
 
