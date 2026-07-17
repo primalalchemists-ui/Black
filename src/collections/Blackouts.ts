@@ -101,7 +101,7 @@ export const Blackouts: CollectionConfig = {
           const endTotal = endH * 60 + endM;
 
           if (endTotal <= startTotal) {
-            throw new APIError(“Czas „Do” musi być późniejszy niż „Od”.”, 400, undefined, true);
+            throw new APIError('Czas “Do” musi być późniejszy niż “Od”.', 400, undefined, true);
           }
         } else {
           // porządek danych przy całodniowej (bezpieczne wartości z listy)
