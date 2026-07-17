@@ -327,7 +327,17 @@ export default async function PodziekowaniePageWrapper({
             <Link href="/">Strona główna</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/rezerwacje">Rezerwacje</Link>
+            <Link href={(() => {
+              const typeRoutes: Record<string, string> = {
+                kregle: "/rezerwacje/kregle",
+                bilard: "/rezerwacje/bilard",
+                stolik: "/rezerwacje/stoliki",
+                impreza: "/rezerwacje/imprezy",
+                biznes: "/rezerwacje/biznes",
+              }
+              const route = typeRoutes[firstType ?? ""] ?? "/rezerwacje"
+              return dateISO ? `${route}?date=${dateISO}` : route
+            })()}>Rezerwacje</Link>
           </Button>
         </div>
       </div>

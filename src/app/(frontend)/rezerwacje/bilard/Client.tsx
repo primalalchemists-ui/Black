@@ -69,7 +69,7 @@ function sendBeaconCancel(sessionId: string): void {
   } catch {}
 }
 
-export default function RezerwacjeBilardPage() {
+export default function RezerwacjeBilardPage({ initialDate }: { initialDate?: string }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [gridReady, setGridReady] = useState(false);
   const [gridEnabled, setGridEnabled] = useState(true);
@@ -78,6 +78,7 @@ export default function RezerwacjeBilardPage() {
   const [gridRefreshKey, setGridRefreshKey] = useState(0);
 
   const [day, setDay] = useState<string>(() => {
+    if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) return initialDate;
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");

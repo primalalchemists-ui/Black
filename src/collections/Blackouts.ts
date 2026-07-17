@@ -1,5 +1,6 @@
 // src/collections/Blackouts.ts
 import type { CollectionConfig } from "payload";
+import { APIError } from "payload";
 import type { Service } from "@/lib/resourceFilters";
 import { expectedResourceTypeByService, extractRelationshipIds } from "@/lib/resourceFilters";
 
@@ -53,7 +54,7 @@ export const Blackouts: CollectionConfig = {
         // ===== zasoby =====
         const ids = extractRelationshipIds((data as any).resources);
         if (ids.length === 0) {
-          throw new Error("Wybierz co najmniej jeden zasób do zablokowania.");
+          throw new APIError("Wybierz co najmniej jeden zasób do zablokowania.", 400, undefined, true);
         }
 
         const expectedType = expectedResourceTypeByService[service];
@@ -68,10 +69,11 @@ export const Blackouts: CollectionConfig = {
         const wrong = (found?.docs || []).filter((r: any) => r?.type !== expectedType);
         if (wrong.length > 0) {
           const wrongLabels = wrong.map((r: any) => r?.label || r?.id).join(", ");
-          throw new Error(
+          throw new APIError(
             service === "bowling"
               ? `Dla kręgli możesz blokować tylko tory (lane). Błędne zasoby: ${wrongLabels}`
               : `Dla bilarda możesz blokować tylko stoły bilardowe (billiard). Błędne zasoby: ${wrongLabels}`,
+            400, undefined, true,
           );
         }
 
@@ -85,21 +87,21 @@ export const Blackouts: CollectionConfig = {
           const endM = Number((data as any).endMinute);
 
           if ([startH, startM, endH, endM].some((x) => Number.isNaN(x))) {
-            throw new Error("Nieprawidłowa godzina/minuta.");
+            throw new APIError("Nieprawidłowa godzina/minuta.", 400, undefined, true);
           }
 
           if (startH < 0 || startH > 23 || endH < 0 || endH > 23) {
-            throw new Error("Godzina musi być w zakresie 0–23.");
+            throw new APIError("Godzina musi być w zakresie 0–23.", 400, undefined, true);
           }
           if (startM < 0 || startM > 59 || endM < 0 || endM > 59) {
-            throw new Error("Minuta musi być w zakresie 0–59.");
+            throw new APIError("Minuta musi być w zakresie 0–59.", 400, undefined, true);
           }
 
           const startTotal = startH * 60 + startM;
           const endTotal = endH * 60 + endM;
 
           if (endTotal <= startTotal) {
-            throw new Error("Czas „Do” musi być późniejszy niż „Od”.");
+            throw new APIError(“Czas „Do” musi być późniejszy niż „Od”.”, 400, undefined, true);
           }
         } else {
           // porządek danych przy całodniowej (bezpieczne wartości z listy)
@@ -167,7 +169,7 @@ export const Blackouts: CollectionConfig = {
         for (const r of resCandidates.docs as any[]) {
           const rIds = extractIds(r.resources);
           if (ids.some((id) => rIds.includes(id))) {
-            throw new Error("Wystąpiła kolizja z istniejącą rezerwacją w tym terminie.");
+            throw new APIError("Wystąpiła kolizja z istniejącą rezerwacją w tym terminie.", 400, undefined, true);
           }
         }
 
@@ -200,7 +202,7 @@ export const Blackouts: CollectionConfig = {
           const bOtherEnd   = bOtherAllDay ? toUTC(23, 59) : toUTC(Number((b as any).endHour), Number((b as any).endMinute));
 
           if (resOverlap(bStart, bEnd, bOtherStart, bOtherEnd)) {
-            throw new Error("Wystąpiła kolizja z istniejącą blokadą dostępności w tym terminie.");
+            throw new APIError("Wystąpiła kolizja z istniejącą blokadą dostępności w tym terminie.", 400, undefined, true);
           }
         }
 
