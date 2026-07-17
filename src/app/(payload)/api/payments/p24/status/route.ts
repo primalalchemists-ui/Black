@@ -32,10 +32,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ status: "ok" })
   }
 
-  await confirmGroupPayment(String(sessionId), {
+  const result = await confirmGroupPayment(String(sessionId), {
     orderId: Number(orderId),
     amount: Number(amount),
   })
+
+  // db_error: P24 verify succeeded but DB save failed.
+  // Return 500 so P24 retries the callback (up to 3 times over 24h).
+  // confirmGroupPayment is idempotent — retry is safe.
+  if (result === "db_error") {
+    console.error(`[P24 callback] P24_CALLBACK_DB_ERROR_WILL_RETRY sessionId=${sessionId} orderId=${orderId}`)
+    return NextResponse.json({ status: "error" }, { status: 500 })
+  }
 
   return NextResponse.json({ status: "ok" })
 }

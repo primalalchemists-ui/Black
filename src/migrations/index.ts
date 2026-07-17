@@ -10,6 +10,8 @@ import * as migration_20260712_add_reservation_segments from './20260712_add_res
 import * as migration_20260712_add_occasional_inquiry_payment_fields from './20260712_add_occasional_inquiry_payment_fields';
 import * as migration_20260712_add_expires_at_to_reservations from './20260712_add_expires_at_to_reservations';
 import * as migration_20260712_add_internal_note_to_reservations from './20260712_add_internal_note_to_reservations';
+import * as migration_20260716_add_verifying_to_payment_status from './20260716_add_verifying_to_payment_status';
+import * as migration_20260716_unique_payment_session from './20260716_unique_payment_session';
 
 export const migrations = [
   {
@@ -71,5 +73,15 @@ export const migrations = [
     up: migration_20260712_add_internal_note_to_reservations.up,
     down: migration_20260712_add_internal_note_to_reservations.down,
     name: '20260712_add_internal_note_to_reservations',
+  },
+  {
+    up: migration_20260716_add_verifying_to_payment_status.up,
+    down: migration_20260716_add_verifying_to_payment_status.down,
+    name: '20260716_add_verifying_to_payment_status',
+  },
+  {
+    up: migration_20260716_unique_payment_session.up,
+    down: migration_20260716_unique_payment_session.down,
+    name: '20260716_unique_payment_session',
   },
 ];

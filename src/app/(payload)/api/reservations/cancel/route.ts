@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPayload } from "payload"
 import config from "@payload-config"
+import { tryPaymentLock } from "@/lib/paymentLifecycle"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,7 +16,8 @@ export async function POST(req: Request) {
 
     const payload = await getPayload({ config })
 
-    // Don't cancel if P24 callback already arrived (payment record exists = user paid)
+    // Szybka ścieżka: jeśli płatność została już zatwierdzona — nie anuluj.
+    // Payment pending = normalny stan po registerTransaction, nie oznacza że płatność wykonana.
     const paymentCheck = await payload.find({
       collection: "payments",
       limit: 1,
@@ -23,42 +25,74 @@ export async function POST(req: Request) {
       where: { p24SessionId: { equals: sessionId } },
     })
     if (paymentCheck.docs.length > 0) {
-      return NextResponse.json({ ok: true, cancelled: 0, reason: "already_paid" })
+      const payment = paymentCheck.docs[0] as any
+      if (payment.status === "paid" || payment.status === "refunded") {
+        console.log(`[cancel] CANCEL_SKIPPED_PAYMENT_PAID sessionId=${sessionId} paymentStatus=${payment.status}`)
+        return NextResponse.json({ ok: true, expired: 0, reason: "payment_paid" })
+      }
+      // payment.status = "pending" → można zwolnić hold (expiresAt = now), pod lockiem
     }
 
-    const result = await payload.find({
-      collection: "reservations",
-      limit: 20,
-      overrideAccess: true,
-      where: {
-        and: [
-          { groupId: { equals: sessionId } },
-          { paymentStatus: { equals: "pending" } },
-        ],
-      },
-    })
+    // tryPaymentLock: nie blokuj jeśli callback jest w trakcie przetwarzania.
+    // Callback trzyma blokadę ~5s; jeśli nie możemy jej uzyskać, expiresAt i tak wygaśnie slot.
+    const lockResult = await tryPaymentLock(payload, sessionId, async () => {
+      // Świeży odczyt wewnątrz blokady
+      const result = await payload.find({
+        collection: "reservations",
+        limit: 20,
+        overrideAccess: true,
+        where: {
+          and: [
+            { groupId: { equals: sessionId } },
+            { paymentStatus: { in: ["pending", "verifying"] } },
+          ],
+        },
+      })
 
-    let cancelled = 0
-    for (const doc of result.docs as any[]) {
-      try {
-        await payload.delete({ collection: "reservations", id: doc.id, overrideAccess: true })
-        cancelled++
-      } catch (err: any) {
-        console.error("[cancel] delete failed, cancelling:", err?.message)
-        await payload
-          .update({
+      let expired = 0
+      for (const doc of result.docs as any[]) {
+        // Świeży odczyt wewnątrz locka — sprawdź paymentStatus i status rezerwacji
+        if (doc.paymentStatus === "verifying") {
+          console.log(`[cancel] CANCEL_SKIPPED_VERIFYING reservationId=${doc.id} reservationNumber=${doc.reservationNumber} sessionId=${sessionId}`)
+          continue
+        }
+
+        if (doc.paymentStatus === "paid" || doc.status === "confirmed") {
+          console.log(`[cancel] CANCEL_SKIPPED_PAID reservationId=${doc.id} paymentStatus=${doc.paymentStatus} status=${doc.status} sessionId=${sessionId}`)
+          continue
+        }
+
+        if (doc.paymentStatus !== "pending") {
+          console.log(`[cancel] CANCEL_SKIPPED_OTHER reservationId=${doc.id} paymentStatus=${doc.paymentStatus} sessionId=${sessionId}`)
+          continue
+        }
+
+        // Ustaw expiresAt = teraz → slot natychmiast wolny, rekord zostaje w bazie
+        try {
+          await payload.update({
             collection: "reservations",
             id: doc.id,
             overrideAccess: true,
-            data: { status: "cancelled", paymentStatus: "failed" } as any,
+            data: { expiresAt: new Date().toISOString() } as any,
           })
-          .catch(() => {})
-        cancelled++
+          expired++
+          console.log(`[cancel] PENDING_EXPIRED reservationId=${doc.id} reservationNumber=${doc.reservationNumber} sessionId=${sessionId}`)
+        } catch (err: any) {
+          console.error(`[cancel] expire failed id=${doc.id}:`, err?.message)
+        }
       }
+
+      console.log(`[cancel] sessionId=${sessionId} expired=${expired}`)
+      return expired
+    })
+
+    if (lockResult === null) {
+      // Lock niedostępny — callback jest w trakcie, expiresAt zwolni slot automatycznie
+      console.log(`[cancel] CANCEL_LOCK_UNAVAILABLE sessionId=${sessionId} — callback in progress, expiresAt will expire slot`)
+      return NextResponse.json({ ok: true, expired: 0, reason: "lock_unavailable" })
     }
 
-    console.log(`[cancel] sessionId=${sessionId} cancelled=${cancelled}`)
-    return NextResponse.json({ ok: true, cancelled })
+    return NextResponse.json({ ok: true, expired: lockResult })
   } catch (err: any) {
     console.error("[cancel] error:", err?.message ?? err)
     return NextResponse.json({ ok: false }, { status: 500 })

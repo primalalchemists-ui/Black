@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -44,15 +44,29 @@ type AvailabilityResponse =
     }
   | { ok: false; error: string };
 
-function cancelPendingSession(): Promise<void> {
-  const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return Promise.resolve()
-  sessionStorage.removeItem("_pendingCancelSession")
-  return fetch("/api/reservations/cancel", {
+function doCancel(sessionId: string): void {
+  fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).then(() => {}).catch(() => {})
+  }).catch(() => {})
+  try {
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
+}
+
+function sendBeaconCancel(sessionId: string): void {
+  try {
+    navigator.sendBeacon(
+      "/api/reservations/cancel",
+      new Blob([JSON.stringify({ sessionId })], { type: "application/json" })
+    )
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
 }
 
 export default function RezerwacjeBilardPage() {
@@ -73,6 +87,9 @@ export default function RezerwacjeBilardPage() {
 
   // ✅ ustawienia z panelu (przez endpoint GET)
   const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId }, [activeSessionId]);
 
   useEffect(() => {
     let alive = true;
@@ -158,23 +175,45 @@ export default function RezerwacjeBilardPage() {
     shouldFocusError: false,
   });
 
-  // Cancel pending session on back-from-P24, restore form state so user doesn't retype
+  // Mount: wykryj powrót z P24 (sessionStorage) lub osieroconą sesję.
+  // NIE anuluj od razu po powrocie — użytkownik może kontynuować płatność.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    const pendingSid = sessionStorage.getItem("_pendingCancelSession")
     const savedRaw = sessionStorage.getItem("_pendingFormState_bilard")
-    sessionStorage.removeItem("_pendingFormState_bilard")
-    cancelPendingSession().then(() => {
+
+    if (pendingSid && savedRaw) {
+      sessionStorage.removeItem("_pendingFormState_bilard")
+      setActiveSessionId(pendingSid)
+      try {
+        const saved = JSON.parse(savedRaw)
+        if (saved.day) setDay(saved.day)
+        if (saved.grid) setGrid(saved.grid)
+        if (saved.formValues) form.reset(saved.formValues)
+        setStep(2)
+      } catch {}
       setGridRefreshKey(k => k + 1)
-      if (savedRaw) {
-        try {
-          const saved = JSON.parse(savedRaw)
-          if (saved.day) setDay(saved.day)
-          if (saved.grid) setGrid(saved.grid)
-          if (saved.formValues) form.reset(saved.formValues)
-          setStep(2)
-        } catch {}
-      }
-    })
+    } else if (pendingSid && !savedRaw) {
+      sessionStorage.removeItem("_pendingCancelSession")
+      doCancel(pendingSid)
+      setGridRefreshKey(k => k + 1)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      const sid = activeSessionIdRef.current
+      if (sid) doCancel(sid)
+    }
+  }, [])
+
+  useEffect(() => {
+    function onPageHide() {
+      const sid = activeSessionIdRef.current
+      if (sid) sendBeaconCancel(sid)
+    }
+    window.addEventListener("pagehide", onPageHide)
+    return () => window.removeEventListener("pagehide", onPageHide)
   }, [])
 
   useEffect(() => {
@@ -196,13 +235,17 @@ export default function RezerwacjeBilardPage() {
 
   async function onSubmit(values: BilliardsRequest) {
     try {
-      // ✅ dopinamy segments do payloadu (nawet jeśli schema nie ma)
-      const payload = { ...(values as any), segments: grid.segments };
+      // Nie anuluj starej sesji przed POST — serwer obsługuje swap atomowo przez replaceSessionId
+      const postPayload = {
+        ...(values as any),
+        segments: grid.segments,
+        ...(activeSessionId ? { replaceSessionId: activeSessionId } : {}),
+      };
 
       const res = await fetch("/api/reservations/bilard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(postPayload),
       });
 
       const raw = await res.text();
@@ -214,7 +257,7 @@ export default function RezerwacjeBilardPage() {
       }
 
       if (!res.ok) {
-        console.error("POST /api/reservations/bilard failed", { status: res.status, raw, parsed, sent: payload });
+        console.error("POST /api/reservations/bilard failed", { status: res.status, raw, parsed, sent: postPayload });
 
         if (parsed?.error === "VALIDATION_ERROR" && Array.isArray(parsed.issues)) {
           for (const issue of parsed.issues) {
@@ -223,6 +266,16 @@ export default function RezerwacjeBilardPage() {
           }
           form.setError("root.server" as any, { type: "server", message: parsed?.message ?? "Błąd walidacji." });
           return;
+        }
+
+        if (typeof parsed?.error === "string" && parsed.error.startsWith("REPLACE_")) {
+          const shouldClear = parsed.error === "REPLACE_NOT_FOUND" || parsed.error === "REPLACE_OWNERSHIP"
+          if (shouldClear) {
+            setActiveSessionId(null)
+            try { sessionStorage.removeItem("_pendingCancelSession") } catch {}
+          }
+          form.setError("root.server" as any, { type: "server", message: parsed?.message ?? "Poprzednia sesja wygasła. Spróbuj ponownie." })
+          return
         }
 
         if (parsed?.error === "NO_AVAILABILITY" || res.status === 409) {
@@ -293,7 +346,14 @@ export default function RezerwacjeBilardPage() {
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="grid gap-2">
-              <WeekDateCards value={day} onChange={(d) => { setDay(d); setConflictMessage(null); }} />
+              <WeekDateCards value={day} onChange={(d) => {
+                if (activeSessionId) {
+                  doCancel(activeSessionId)
+                  setActiveSessionId(null)
+                }
+                setDay(d)
+                setConflictMessage(null)
+              }} />
             </div>
 
             {conflictMessage ? (
@@ -306,6 +366,7 @@ export default function RezerwacjeBilardPage() {
               key={gridRefreshKey}
               type="bilard"
               date={day}
+              sessionId={activeSessionId ?? undefined}
               resourceLabel="Stół"
               resourcesCount={cfg?.resourcesCount ?? 3}
               pricePerHour={cfg?.pricePerHour ?? 50}

@@ -721,6 +721,7 @@ export const Reservations: CollectionConfig = {
       options: [
         { label: "Nie dotyczy", value: "not_required" },
         { label: "Oczekuje", value: "pending" },
+        { label: "Weryfikacja", value: "verifying" },
         { label: "Opłacone", value: "paid" },
         { label: "Nieudane", value: "failed" },
         { label: "Zwrot", value: "refunded" },

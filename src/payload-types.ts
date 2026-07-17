@@ -248,7 +248,7 @@ export interface Reservation {
   status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'completed';
   depositRequired?: boolean | null;
   depositAmount?: number | null;
-  paymentStatus?: ('not_required' | 'pending' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
+  paymentStatus?: ('not_required' | 'pending' | 'verifying' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
   paymentProvider?: 'p24' | null;
   payment?: (number | null) | Payment;
   groupId?: string | null;

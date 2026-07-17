@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -45,15 +45,31 @@ type AvailabilityResponse =
     }
   | { ok: false; error: string };
 
-function cancelPendingSession(): Promise<void> {
-  const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return Promise.resolve()
-  sessionStorage.removeItem("_pendingCancelSession")
-  return fetch("/api/reservations/cancel", {
+function doCancel(sessionId: string): void {
+  fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).then(() => {}).catch(() => {})
+  }).catch(() => {})
+  try {
+    // Usuń tylko jeśli pasuje — nie kasuj nowszej sesji
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
+}
+
+function sendBeaconCancel(sessionId: string): void {
+  try {
+    navigator.sendBeacon(
+      "/api/reservations/cancel",
+      new Blob([JSON.stringify({ sessionId })], { type: "application/json" })
+    )
+    // Usuń tylko jeśli pasuje — nie kasuj nowszej sesji (np. po re-submicie do P24)
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
 }
 
 export default function RezerwacjeKreglePage() {
@@ -73,6 +89,9 @@ export default function RezerwacjeKreglePage() {
   });
 
   const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId }, [activeSessionId]);
 
 
   useEffect(() => {
@@ -157,23 +176,49 @@ export default function RezerwacjeKreglePage() {
     shouldFocusError: false,
   });
 
-  // Cancel pending session on back-from-P24, restore form state so user doesn't retype
+  // Mount: wykryj powrót z P24 (sessionStorage) lub osieroconą sesję.
+  // NIE anuluj od razu po powrocie — użytkownik może kontynuować płatność.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    const pendingSid = sessionStorage.getItem("_pendingCancelSession")
     const savedRaw = sessionStorage.getItem("_pendingFormState_kregle")
-    sessionStorage.removeItem("_pendingFormState_kregle")
-    cancelPendingSession().then(() => {
+
+    if (pendingSid && savedRaw) {
+      // Powrót z P24 — przywróć stan, ale NIE anuluj. Użytkownik może ponowić płatność.
+      sessionStorage.removeItem("_pendingFormState_kregle")
+      setActiveSessionId(pendingSid)
+      try {
+        const saved = JSON.parse(savedRaw)
+        if (saved.day) setDay(saved.day)
+        if (saved.grid) setGrid(saved.grid)
+        if (saved.formValues) form.reset(saved.formValues)
+        setStep(2)
+      } catch {}
       setGridRefreshKey(k => k + 1)
-      if (savedRaw) {
-        try {
-          const saved = JSON.parse(savedRaw)
-          if (saved.day) setDay(saved.day)
-          if (saved.grid) setGrid(saved.grid)
-          if (saved.formValues) form.reset(saved.formValues)
-          setStep(2)
-        } catch {}
-      }
-    })
+    } else if (pendingSid && !savedRaw) {
+      // Osierocona sesja (brak stanu formularza) — anuluj
+      sessionStorage.removeItem("_pendingCancelSession")
+      doCancel(pendingSid)
+      setGridRefreshKey(k => k + 1)
+    }
+  }, [])
+
+  // Anuluj przy odmontowaniu (SPA-navigation, kliknięcie "Wróć" poza stronę).
+  useEffect(() => {
+    return () => {
+      const sid = activeSessionIdRef.current
+      if (sid) doCancel(sid)
+    }
+  }, [])
+
+  // Anuluj przy zamknięciu/opuszczeniu karty (pagehide = niezawodniejszy niż beforeunload).
+  useEffect(() => {
+    function onPageHide() {
+      const sid = activeSessionIdRef.current
+      if (sid) sendBeaconCancel(sid)
+    }
+    window.addEventListener("pagehide", onPageHide)
+    return () => window.removeEventListener("pagehide", onPageHide)
   }, [])
 
   useEffect(() => {
@@ -193,12 +238,17 @@ export default function RezerwacjeKreglePage() {
 
   async function onSubmit(values: BowlingRequest) {
     try {
-      const payload = { ...(values as any), segments: grid.segments };
+      // Nie anuluj starej sesji przed POST — serwer obsługuje swap atomowo przez replaceSessionId
+      const postPayload = {
+        ...(values as any),
+        segments: grid.segments,
+        ...(activeSessionId ? { replaceSessionId: activeSessionId } : {}),
+      };
 
       const res = await fetch("/api/reservations/kregle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(postPayload),
       });
 
       const raw = await res.text();
@@ -210,7 +260,7 @@ export default function RezerwacjeKreglePage() {
       }
 
       if (!res.ok) {
-        console.error("POST /api/reservations/kregle failed", { status: res.status, raw, parsed, sent: payload });
+        console.error("POST /api/reservations/kregle failed", { status: res.status, raw, parsed, sent: postPayload });
 
         if (parsed?.error === "VALIDATION_ERROR" && Array.isArray(parsed.issues)) {
           for (const issue of parsed.issues) {
@@ -219,6 +269,18 @@ export default function RezerwacjeKreglePage() {
           }
           form.setError("root.server" as any, { type: "server", message: parsed?.message ?? "Błąd walidacji." });
           return;
+        }
+
+        if (typeof parsed?.error === "string" && parsed.error.startsWith("REPLACE_")) {
+          // Czyść session tylko gdy stara sesja definitywnie nie istnieje lub nie należy do tego klienta.
+          // REPLACE_LOCKED/REPLACE_BUSY/REPLACE_PAID_DURING_SWAP — zachowaj session, callback może właśnie kończyć.
+          const shouldClear = parsed.error === "REPLACE_NOT_FOUND" || parsed.error === "REPLACE_OWNERSHIP"
+          if (shouldClear) {
+            setActiveSessionId(null)
+            try { sessionStorage.removeItem("_pendingCancelSession") } catch {}
+          }
+          form.setError("root.server" as any, { type: "server", message: parsed?.message ?? "Poprzednia sesja wygasła. Spróbuj ponownie." })
+          return
         }
 
         if (parsed?.error === "NO_AVAILABILITY" || res.status === 409) {
@@ -288,7 +350,15 @@ export default function RezerwacjeKreglePage() {
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="grid gap-2">
-              <WeekDateCards value={day} onChange={(d) => { setDay(d); setConflictMessage(null); }} />
+              <WeekDateCards value={day} onChange={(d) => {
+                // Zmiana daty = nowy wybór terminu — anuluj starą sesję (jeśli była)
+                if (activeSessionId) {
+                  doCancel(activeSessionId)
+                  setActiveSessionId(null)
+                }
+                setDay(d)
+                setConflictMessage(null)
+              }} />
             </div>
 
             {conflictMessage ? (
@@ -301,6 +371,7 @@ export default function RezerwacjeKreglePage() {
               key={gridRefreshKey}
               type="kregle"
               date={day}
+              sessionId={activeSessionId ?? undefined}
               resourceLabel="Tor"
               resourcesCount={cfg?.resourcesCount ?? 4}
               pricePerHour={cfg?.pricePerHour ?? 120}

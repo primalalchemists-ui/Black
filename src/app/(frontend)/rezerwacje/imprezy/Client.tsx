@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -60,15 +60,29 @@ interface Props {
   initialEventId?: string;
 }
 
-function cancelPendingSession(): Promise<void> {
-  const sessionId = sessionStorage.getItem("_pendingCancelSession")
-  if (!sessionId) return Promise.resolve()
-  sessionStorage.removeItem("_pendingCancelSession")
-  return fetch("/api/reservations/cancel", {
+function doCancel(sessionId: string): void {
+  fetch("/api/reservations/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
-  }).then(() => {}).catch(() => {})
+  }).catch(() => {})
+  try {
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
+}
+
+function sendBeaconCancel(sessionId: string): void {
+  try {
+    navigator.sendBeacon(
+      "/api/reservations/cancel",
+      new Blob([JSON.stringify({ sessionId })], { type: "application/json" })
+    )
+    if (sessionStorage.getItem("_pendingCancelSession") === sessionId) {
+      sessionStorage.removeItem("_pendingCancelSession")
+    }
+  } catch {}
 }
 
 export default function ImprezaClient({ initialEventId }: Props) {
@@ -79,6 +93,9 @@ export default function ImprezaClient({ initialEventId }: Props) {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [fetchedOnce, setFetchedOnce] = useState(false);
   const [eventId, setEventId] = useState<string>(initialEventId ?? "");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId }, [activeSessionId]);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const event = useMemo(() => events.find((e) => e.id === eventId) ?? null, [events, eventId]);
@@ -90,6 +107,9 @@ export default function ImprezaClient({ initialEventId }: Props) {
     return Math.max(0, capacityNum - taken);
   }, [capacityNum, event]);
   const isSoldOut = spotsLeft !== null && spotsLeft <= 0;
+  // Przy aktywnej sesji (powrót z P24) pomiń blokadę sold-out — własna pending
+  // rezerwacja zawyża takenSeats. Serwer sprawdzi capacity po anulowaniu holda.
+  const effectiveSoldOut = isSoldOut && !activeSessionId;
   const registrationsClosed = event?.registrationsEnabled === false;
 
   const form = useForm<ImprezaRequest>({
@@ -172,21 +192,46 @@ export default function ImprezaClient({ initialEventId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cancel pending session on back-from-P24, restore form state so user doesn't retype
+  // Mount: wykryj powrót z P24, przywróć stan BEZ natychmiastowego anulowania.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    const pendingSid = sessionStorage.getItem("_pendingCancelSession")
     const savedRaw = sessionStorage.getItem("_pendingFormState_impreza")
-    sessionStorage.removeItem("_pendingFormState_impreza")
-    cancelPendingSession().then(() => loadEvents()).then(() => {
-      if (savedRaw) {
+
+    if (pendingSid && savedRaw) {
+      sessionStorage.removeItem("_pendingFormState_impreza")
+      setActiveSessionId(pendingSid)
+      loadEvents().then(() => {
         try {
           const saved = JSON.parse(savedRaw)
           if (saved.eventId) setEventId(saved.eventId)
           if (saved.formValues) form.reset(saved.formValues)
           setStep(2)
         } catch {}
-      }
-    })
+      })
+    } else if (pendingSid && !savedRaw) {
+      sessionStorage.removeItem("_pendingCancelSession")
+      doCancel(pendingSid)
+      loadEvents()
+    } else {
+      loadEvents()
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      const sid = activeSessionIdRef.current
+      if (sid) doCancel(sid)
+    }
+  }, [])
+
+  useEffect(() => {
+    function onPageHide() {
+      const sid = activeSessionIdRef.current
+      if (sid) sendBeaconCancel(sid)
+    }
+    window.addEventListener("pagehide", onPageHide)
+    return () => window.removeEventListener("pagehide", onPageHide)
   }, [])
 
   useEffect(() => {
@@ -201,16 +246,21 @@ export default function ImprezaClient({ initialEventId }: Props) {
   async function onSubmit(values: ImprezaRequest) {
     setServerError(null);
 
-    if (isSoldOut) {
+    if (effectiveSoldOut) {
       form.setError("eventId" as any, { type: "server", message: "Koniec miejsc na to wydarzenie." });
       return;
     }
 
     try {
+      // Nie anuluj starej sesji przed POST — serwer obsługuje swap atomowo przez replaceSessionId
+      const postBody = activeSessionId
+        ? { ...values, replaceSessionId: activeSessionId }
+        : values;
+
       const res = await fetch("/api/reservations/impreza", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(postBody),
       });
 
       const json = await res.json().catch(() => null);
@@ -222,6 +272,16 @@ export default function ImprezaClient({ initialEventId }: Props) {
             if (path) form.setError(path as any, { type: "server", message: issue.message });
           }
           return;
+        }
+
+        if (typeof json?.error === "string" && json.error.startsWith("REPLACE_")) {
+          const shouldClear = json.error === "REPLACE_NOT_FOUND" || json.error === "REPLACE_OWNERSHIP"
+          if (shouldClear) {
+            setActiveSessionId(null)
+            try { sessionStorage.removeItem("_pendingCancelSession") } catch {}
+          }
+          setServerError(json?.message ?? "Poprzednia sesja wygasła. Spróbuj ponownie.")
+          return
         }
 
         if (json?.error === "NO_AVAILABILITY") {
@@ -504,12 +564,12 @@ export default function ImprezaClient({ initialEventId }: Props) {
                 <Button
                   type="submit"
                   className="bg-black text-white hover:bg-black/90"
-                  disabled={form.formState.isSubmitting || !eventId || isSoldOut}
+                  disabled={form.formState.isSubmitting || !eventId || effectiveSoldOut}
                   onClick={async () => {
                     await form.trigger();
                   }}
                 >
-                  {isSoldOut
+                  {effectiveSoldOut
                     ? "Koniec miejsc"
                     : form.formState.isSubmitting
                       ? "Przetwarzam..."

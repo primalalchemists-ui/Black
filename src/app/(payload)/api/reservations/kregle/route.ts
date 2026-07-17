@@ -22,6 +22,7 @@ import { registerTransaction } from "@/lib/p24";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
 import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
+import { tryPaymentLock } from "@/lib/paymentLifecycle";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -78,6 +79,7 @@ export async function GET(req: Request) {
 
   const date = searchParams.get("date");
   if (!date) return NextResponse.json({ ok: false, error: "MISSING_DATE" }, { status: 400 });
+  const ownSessionId = searchParams.get("sessionId") ?? null;
 
   const settings = await payload.findGlobal({ slug: "reservation-settings" });
   const s = settings?.bowling ?? {};
@@ -206,6 +208,8 @@ export async function GET(req: Request) {
             { expiresAt: { greater_than_equal: nowISO } },
           ],
         } as any,
+        // wyklucz własną sesję użytkownika (powrót z P24 — self-blocking prevention)
+        ...(ownSessionId ? [{ groupId: { not_equals: ownSessionId } }] : []),
       ],
     },
   });
@@ -309,6 +313,59 @@ export async function POST(req: Request) {
   const useSegments = Array.isArray(segmentsRaw) && segmentsRaw.length > 0;
 
   const data: any = parsed.success ? parsed.data : body;
+
+  // replaceSessionId: atomowe zastąpienie starej sesji — eliminuje race window przy ponownym submicie
+  const replaceSessionId: string | null = typeof body?.replaceSessionId === "string" ? body.replaceSessionId.trim() || null : null
+  let oldReservationId: number | null = null
+
+  if (replaceSessionId) {
+    const validResult = await tryPaymentLock(payload, replaceSessionId, async () => {
+      const oldRes = await payload.find({
+        collection: "reservations",
+        limit: 1,
+        overrideAccess: true,
+        where: {
+          and: [
+            { groupId: { equals: replaceSessionId } },
+            { type: { equals: "kregle" } },
+          ],
+        },
+      })
+      if (!oldRes.docs.length) return { error: "REPLACE_NOT_FOUND" as const }
+      const old = oldRes.docs[0] as any
+      if ((old.customer?.email ?? "") !== (data.email ?? "")) return { error: "REPLACE_OWNERSHIP" as const }
+      if (old.paymentStatus === "paid" || old.status === "confirmed") return { error: "REPLACE_PAID" as const }
+      if (old.paymentStatus === "verifying") return { error: "REPLACE_VERIFYING" as const }
+      if (old.paymentStatus !== "pending") return { error: "REPLACE_INVALID_STATUS" as const }
+      // Sprawdź też payment.status — callback może ustawić payment=paid zanim reservation.paymentStatus się zmieni
+      const pmtCheck = await payload.find({
+        collection: "payments",
+        limit: 1,
+        overrideAccess: true,
+        where: { p24SessionId: { equals: replaceSessionId } },
+      })
+      if (pmtCheck.docs.length > 0) {
+        const pmt = pmtCheck.docs[0] as any
+        if (pmt.status === "paid" || pmt.status === "refunded") return { error: "REPLACE_PAID" as const }
+      }
+      return { oldId: old.id as number }
+    })
+
+    if (validResult === null) {
+      return NextResponse.json({ error: "REPLACE_LOCKED", message: "Poprzednia sesja jest weryfikowana. Odczekaj chwilę i spróbuj ponownie." }, { status: 409 })
+    }
+    if ("error" in validResult) {
+      const msgs: Record<string, string> = {
+        REPLACE_NOT_FOUND: "Poprzednia sesja rezerwacji nie istnieje.",
+        REPLACE_OWNERSHIP: "Adres e-mail nie pasuje do poprzedniej sesji.",
+        REPLACE_PAID: "Poprzednia sesja została już opłacona.",
+        REPLACE_VERIFYING: "Poprzednia sesja jest w trakcie weryfikacji płatności.",
+        REPLACE_INVALID_STATUS: "Poprzednia sesja ma nieprawidłowy status.",
+      }
+      return NextResponse.json({ error: validResult.error, message: msgs[validResult.error] ?? "Błąd walidacji sesji poprzedniej." }, { status: 409 })
+    }
+    oldReservationId = validResult.oldId
+  }
 
   if (data.type !== "kregle") {
     return NextResponse.json(
@@ -572,6 +629,8 @@ export async function POST(req: Request) {
                   { expiresAt: { greater_than_equal: new Date().toISOString() } },
                 ],
               } as any,
+              // wyklucz własną sesję (replaceSessionId) — atomowy swap bez race window
+              ...(replaceSessionId ? [{ groupId: { not_equals: replaceSessionId } }] : []) as any[],
             ],
           },
         }),
@@ -667,9 +726,12 @@ export async function POST(req: Request) {
         } as any,
       });
 
-      // P24 po zapisie — przy błędzie usuwamy rezerwację (brak osieroconych rekordów)
+      // P24 po zapisie rezerwacji
       let p24PayUrl: string | null = null;
+      let replaceConflict: string | null = null;
+      let createdPaymentId: number | null = null;
       if (amountGrosze > 0) {
+        console.log(`[kregle] P24_REGISTER_STARTED reservationNumber=${groupReservationNumber} groupId=${groupId} amount=${amountGrosze}`);
         try {
           const { payUrl } = await registerTransaction({
             sessionId: groupId,
@@ -678,24 +740,147 @@ export async function POST(req: Request) {
             email: data.email,
           });
           p24PayUrl = payUrl;
-        } catch (p24Err) {
-          console.error("[kregle] P24 error, anulowanie rezerwacji:", p24Err);
+          console.log(`[kregle] P24_REGISTER_OK reservationNumber=${groupReservationNumber} groupId=${groupId}`);
+
+          // Utwórz pending payment PRZED redirectem — sentinel chroniący przed cancel race
           try {
-            await payload.delete({ collection: "reservations", id: createdDoc.id, overrideAccess: true });
-          } catch (deleteErr) {
-            console.error("[kregle] rollback delete failed, oznaczam jako anulowane:", deleteErr);
-            await payload.update({
-              collection: "reservations",
-              id: createdDoc.id,
+            const createdPayment = await payload.create({
+              collection: "payments",
               overrideAccess: true,
-              data: { status: "cancelled", paymentStatus: "failed" } as any,
-            }).catch((e) => console.error("[kregle] rollback update also failed:", e));
+              data: {
+                provider: "p24",
+                status: "pending",
+                amount: amountGrosze / 100,
+                currency: "PLN",
+                p24SessionId: groupId,
+                reservation: createdDoc.id,
+              } as any,
+            });
+            createdPaymentId = createdPayment.id;
+            console.log(`[kregle] PAYMENT_RECORD_CREATED reservationNumber=${groupReservationNumber} groupId=${groupId} amount=${amountGrosze / 100}`);
+            // Ustaw bidirectional link reservation.payment
+            await payload.update({ collection: "reservations", id: createdDoc.id, overrideAccess: true, context: { skipConflictCheck: true } as any, data: { payment: createdPayment.id } as any }).catch(() => {});
+          } catch (payErr: any) {
+            // Non-fatal: payment record nie powstał, ale verifying guard w cancel i tak chroni
+            console.error(`[kregle] PAYMENT_RECORD_CREATE_FAILED reservationNumber=${groupReservationNumber} groupId=${groupId}:`, payErr?.message);
           }
+
+          // Re-lock + fresh read przed wygaszeniem starej sesji — lock musi objąć samo wygaszenie
+          // (walidacja na początku zwalniała lock zbyt wcześnie — callback mógł zapłacić między walidacją a expire)
+          if (replaceSessionId) {
+            const expireResult = await tryPaymentLock(payload, replaceSessionId, async () => {
+              const [freshResResult, freshPmtResult] = await Promise.all([
+                payload.find({
+                  collection: "reservations",
+                  limit: 10,
+                  overrideAccess: true,
+                  where: {
+                    and: [
+                      { groupId: { equals: replaceSessionId } },
+                      { type: { equals: "kregle" } },
+                    ],
+                  },
+                }),
+                payload.find({
+                  collection: "payments",
+                  limit: 1,
+                  overrideAccess: true,
+                  where: { p24SessionId: { equals: replaceSessionId } },
+                }),
+              ])
+              const pmt = (freshPmtResult.docs[0] as any) ?? null
+              const pmtBlocked = pmt && (pmt.status === "paid" || pmt.status === "refunded")
+              const resBlocked = (freshResResult.docs as any[]).some(
+                r => r.paymentStatus === "paid" || r.paymentStatus === "verifying" || r.status === "confirmed"
+              )
+              if (pmtBlocked || resBlocked) {
+                return { conflict: pmtBlocked ? "payment_paid" : "reservation_blocked" } as const
+              }
+              const nowISO = new Date().toISOString()
+              let expiredCount = 0
+              for (const oldDoc of freshResResult.docs as any[]) {
+                if (oldDoc.paymentStatus === "pending") {
+                  try {
+                    await payload.update({
+                      collection: "reservations",
+                      id: oldDoc.id,
+                      overrideAccess: true,
+                      data: { expiresAt: nowISO } as any,
+                    })
+                    expiredCount++
+                  } catch (perErr: any) {
+                    console.error(`[kregle] REPLACE_EXPIRE_DOC_FAILED id=${oldDoc.id}:`, perErr?.message)
+                  }
+                }
+              }
+              return { ok: true as const, expiredCount }
+            })
+
+            if (expireResult === null) {
+              console.error(`[kregle] CRITICAL REPLACE_EXPIRE_LOCK_UNAVAILABLE replaceSessionId=${replaceSessionId} oldId=${oldReservationId} newId=${createdDoc.id} newRN=${groupReservationNumber} — callback aktywny podczas wygaszenia, stara sesja nie wygaszona`)
+              replaceConflict = "lock_unavailable"
+            } else if ("conflict" in expireResult) {
+              console.error(`[kregle] CRITICAL REPLACE_PAID_DURING_SWAP replaceSessionId=${replaceSessionId} oldId=${oldReservationId} conflict=${expireResult.conflict} newId=${createdDoc.id} newRN=${groupReservationNumber} — stara sesja opłacona podczas swapa, nowa ${createdDoc.id} wygaśnie przez expiresAt, wymagana ręczna weryfikacja`)
+              replaceConflict = expireResult.conflict
+            } else {
+              console.log(`[kregle] REPLACE_OLD_EXPIRED replaceSessionId=${replaceSessionId} oldId=${oldReservationId} count=${expireResult.expiredCount} newId=${createdDoc.id} newRN=${groupReservationNumber}`)
+            }
+          }
+        } catch (p24Err) {
+          // registerTransaction failed — zachowaj rezerwację jako anulowaną (audit trail)
+          console.error(`[kregle] P24_REGISTER_FAILED reservationNumber=${groupReservationNumber} groupId=${groupId}:`, p24Err);
+          await payload.update({
+            collection: "reservations",
+            id: createdDoc.id,
+            overrideAccess: true,
+            data: { status: "cancelled", paymentStatus: "failed" } as any,
+          }).catch((e) => console.error("[kregle] rollback update failed:", e));
           return NextResponse.json({ error: "PAYMENT_ERROR", message: CONTACT_MSG }, { status: 502 });
         }
       }
 
-      console.log(`[kregle] reservation=${createdDoc.id} p24PayUrl=${p24PayUrl} groupId=${groupId}`);
+      console.log(`[kregle] PAYMENT_RESERVATION_CREATED reservationId=${createdDoc.id} reservationNumber=${groupReservationNumber} p24=${!!p24PayUrl} groupId=${groupId}`);
+
+      if (replaceConflict) {
+        const abandonNow = new Date().toISOString()
+        let resExpired = false
+        let pmtMarkedFailed = false
+        try {
+          await payload.update({
+            collection: "reservations",
+            id: createdDoc.id,
+            overrideAccess: true,
+            data: { expiresAt: abandonNow, status: "cancelled", paymentStatus: "failed" } as any,
+          })
+          resExpired = true
+        } catch (e: any) {
+          console.error(`[kregle] CRITICAL REPLACE_CONFLICT_EXPIRE_FAILED newId=${createdDoc.id} — slot NIE zwolniony, fallback expiresAt=${(createdDoc as any).expiresAt ?? "brak"}:`, e?.message)
+        }
+        if (createdPaymentId !== null) {
+          try {
+            await payload.update({
+              collection: "payments",
+              id: createdPaymentId,
+              overrideAccess: true,
+              data: { status: "failed" } as any,
+            })
+            pmtMarkedFailed = true
+          } catch (e: any) {
+            console.error(`[kregle] CRITICAL REPLACE_CONFLICT_PAYMENT_FAILED pmtId=${createdPaymentId}:`, e?.message)
+          }
+        }
+        if (resExpired) {
+          console.error(`[kregle] CRITICAL REPLACE_CONFLICT_NEW_ABANDONED newId=${createdDoc.id} newRN=${groupReservationNumber} newPmtId=${createdPaymentId ?? "none"} pmtFailed=${pmtMarkedFailed} p24SessionId=${groupId} replaceConflict=${replaceConflict} — slot zwolniony natychmiast`)
+        } else {
+          console.error(`[kregle] CRITICAL REPLACE_CONFLICT_SLOT_NOT_FREED newId=${createdDoc.id} newRN=${groupReservationNumber} newPmtId=${createdPaymentId ?? "none"} p24SessionId=${groupId} replaceConflict=${replaceConflict} — slot NIE zwolniony, fallback expiresAt=${(createdDoc as any).expiresAt ?? "brak"}`)
+        }
+        return NextResponse.json({
+          error: replaceConflict === "lock_unavailable" ? "REPLACE_BUSY" : "REPLACE_PAID_DURING_SWAP",
+          message: replaceConflict === "lock_unavailable"
+            ? "Poprzednia płatność jest właśnie weryfikowana. Odczekaj chwilę i sprawdź e-mail."
+            : "Twoja poprzednia płatność właśnie się powiodła. Sprawdź e-mail z potwierdzeniem rezerwacji.",
+        }, { status: 409 })
+      }
 
       if (p24PayUrl) {
         return NextResponse.json({ ok: true, redirectUrl: p24PayUrl, groupId });

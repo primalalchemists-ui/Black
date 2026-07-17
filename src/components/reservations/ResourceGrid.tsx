@@ -38,6 +38,7 @@ type Props = {
 
   type?: "bilard" | "kregle";
   date?: string;
+  sessionId?: string; // własna sesja — wykluczona z "busy" (self-blocking prevention)
 
   onChange?: (v: {
     startHour: number | null; // float (np 16.75)
@@ -91,6 +92,7 @@ export function ResourceGrid({
   pricePerHour: priceFallback,
   type,
   date,
+  sessionId,
   onChange,
   onLoadingChange,
   onEnabledChange,
@@ -121,7 +123,9 @@ export function ResourceGrid({
 
       setLoading(true);
       try {
-        const res = await fetch(`/api/reservations/${type}?date=${encodeURIComponent(date)}`);
+        const params = new URLSearchParams({ date })
+        if (sessionId) params.set("sessionId", sessionId)
+        const res = await fetch(`/api/reservations/${type}?${params.toString()}`);
         const json = (await res.json().catch(() => null)) as ApiResponse | null;
 
         if (!alive) return;
@@ -152,7 +156,7 @@ export function ResourceGrid({
     return () => {
       alive = false;
     };
-  }, [type, date]);
+  }, [type, date, sessionId]);
 
   const timesFallback = useMemo(() => {
     const arr: string[] = [];
