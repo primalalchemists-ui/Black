@@ -9,7 +9,7 @@ export const ReservationSettings: GlobalConfig = {
   admin: { group: 'Ustawienia' },
   access: {
     read: isStaffOrAdmin,
-    update: isAdmin,
+    update: isStaffOrAdmin,
   },
 
   fields: [

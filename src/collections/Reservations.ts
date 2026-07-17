@@ -334,7 +334,7 @@ export const Reservations: CollectionConfig = {
                 const rEnd = segToDate(rDay, rSeg.endHour, rSeg.endMinute);
                 for (const inTime of inTimes) {
                   if (overlaps(rStart, rEnd, inTime.start, inTime.end)) {
-                    throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+                    throw new Error("Wystąpiła kolizja z inną rezerwacją w tym terminie.");
                   }
                 }
               }
@@ -347,7 +347,7 @@ export const Reservations: CollectionConfig = {
                 if (!otherRes.includes(resId)) continue;
                 for (const inTime of inTimes) {
                   if (overlaps(rStart, rEnd, inTime.start, inTime.end)) {
-                    throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+                    throw new Error("Wystąpiła kolizja z inną rezerwacją w tym terminie.");
                   }
                 }
               }
@@ -368,8 +368,48 @@ export const Reservations: CollectionConfig = {
             if (isNaN(rStart.getTime()) || isNaN(rEnd.getTime())) continue;
 
             if (overlaps(rStart, rEnd, startsAt, endsAt)) {
-              throw new Error("Kolizja: wybrany tor/stół jest już zarezerwowany w tym czasie.");
+              throw new Error("Wystąpiła kolizja z inną rezerwacją w tym terminie.");
             }
+          }
+        }
+
+        // 8) Sprawdzenie aktywnych blokad dostępności
+        const serviceForType = type === "kregle" ? "bowling" : "billiard";
+        const base = new Date(startsAt);
+        const y = base.getUTCFullYear(), mo = base.getUTCMonth(), d = base.getUTCDate();
+        const dayStart = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0)).toISOString();
+        const dayEnd   = new Date(Date.UTC(y, mo, d, 23, 59, 59, 999)).toISOString();
+
+        const blackouts = await req.payload.find({
+          collection: "blackouts",
+          limit: 200,
+          overrideAccess: true,
+          where: {
+            and: [
+              { service: { equals: serviceForType } },
+              { active: { equals: true } },
+              { day: { greater_than_equal: dayStart } },
+              { day: { less_than_equal: dayEnd } },
+            ],
+          },
+        });
+
+        for (const b of blackouts.docs as any[]) {
+          const bRes = relIds((b as any).resources);
+          if (!resources.some((id) => bRes.includes(id))) continue;
+
+          const bBase = new Date((b as any).day);
+          const by = bBase.getUTCFullYear(), bmo = bBase.getUTCMonth(), bd = bBase.getUTCDate();
+          const bAllDay = Boolean((b as any).allDay);
+          const bStart = bAllDay
+            ? new Date(Date.UTC(by, bmo, bd, 0, 0, 0, 0))
+            : new Date(Date.UTC(by, bmo, bd, Number((b as any).startHour), Number((b as any).startMinute), 0, 0));
+          const bEnd = bAllDay
+            ? new Date(Date.UTC(by, bmo, bd, 23, 59, 59, 999))
+            : new Date(Date.UTC(by, bmo, bd, Number((b as any).endHour), Number((b as any).endMinute), 0, 0));
+
+          if (overlaps(bStart, bEnd, startsAt, endsAt)) {
+            throw new Error("Wystąpiła kolizja z blokadą dostępności w tym terminie.");
           }
         }
 

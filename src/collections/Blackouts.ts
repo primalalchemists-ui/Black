@@ -44,7 +44,7 @@ export const Blackouts: CollectionConfig = {
 
   hooks: {
     beforeChange: [
-      async ({ data, req }) => {
+      async ({ data, req, operation, originalDoc }) => {
         if (!data) return data;
 
         const service = (data as any).service as Service | undefined;
@@ -107,6 +107,101 @@ export const Blackouts: CollectionConfig = {
           (data as any).startMinute = "0";
           (data as any).endHour = "23";
           (data as any).endMinute = "0";
+        }
+
+        // ===== SPRAWDZENIE KOLIZJI =====
+        const day = (data as any).day;
+        if (!day) return data;
+
+        const base = new Date(day);
+        const y = base.getUTCFullYear(), mo = base.getUTCMonth(), d = base.getUTCDate();
+
+        function toUTC(hour: number, minute: number): Date {
+          return new Date(Date.UTC(y, mo, d, hour, minute, 0, 0));
+        }
+
+        const bStart = allDay ? toUTC(0, 0) : toUTC(Number((data as any).startHour), Number((data as any).startMinute));
+        const bEnd   = allDay ? toUTC(23, 59) : toUTC(Number((data as any).endHour), Number((data as any).endMinute));
+
+        function resOverlap(a: Date, b: Date, c: Date, dd: Date) {
+          return a.getTime() < dd.getTime() && c.getTime() < b.getTime();
+        }
+
+        function extractIds(val: any): string[] {
+          if (!Array.isArray(val)) return [];
+          return (val as any[]).map((x: any) => {
+            if (!x) return null;
+            if (typeof x === "string" || typeof x === "number") return String(x);
+            if (x?.id != null) return String(x.id);
+            if (x?.value?.id != null) return String(x.value.id);
+            if (typeof x?.value === "string") return x.value;
+            return null;
+          }).filter(Boolean) as string[];
+        }
+
+        const now = new Date();
+        const reservationType = service === "bowling" ? "kregle" : "bilard";
+
+        // 1) Kolizja z istniejącymi rezerwacjami
+        const resCandidates = await req.payload.find({
+          collection: "reservations",
+          limit: 200,
+          overrideAccess: true,
+          where: {
+            and: [
+              { type: { equals: reservationType } },
+              { status: { not_in: ["cancelled", "no_show", "completed"] as any } },
+              { startsAt: { less_than: bEnd.toISOString() } },
+              { endsAt: { greater_than: bStart.toISOString() } },
+              {
+                or: [
+                  { paymentStatus: { not_equals: "pending" } },
+                  { expiresAt: { exists: false } },
+                  { expiresAt: { greater_than_equal: now.toISOString() } },
+                ],
+              } as any,
+            ],
+          },
+        });
+
+        for (const r of resCandidates.docs as any[]) {
+          const rIds = extractIds(r.resources);
+          if (ids.some((id) => rIds.includes(id))) {
+            throw new Error("Wystąpiła kolizja z istniejącą rezerwacją w tym terminie.");
+          }
+        }
+
+        // 2) Kolizja z innymi blokadami
+        const selfId = operation === "update" ? String(originalDoc?.id ?? "") : null;
+        const dayStart = toUTC(0, 0).toISOString();
+        const dayEnd   = toUTC(23, 59).toISOString();
+
+        const bCandidates = await req.payload.find({
+          collection: "blackouts",
+          limit: 200,
+          overrideAccess: true,
+          where: {
+            and: [
+              { service: { equals: service } },
+              { active: { equals: true } },
+              { day: { greater_than_equal: dayStart } },
+              { day: { less_than_equal: dayEnd } },
+              ...(selfId ? [{ id: { not_equals: selfId } }] : []),
+            ],
+          },
+        });
+
+        for (const b of bCandidates.docs as any[]) {
+          const bOtherIds = extractIds((b as any).resources);
+          if (!ids.some((id) => bOtherIds.includes(id))) continue;
+
+          const bOtherAllDay = Boolean((b as any).allDay);
+          const bOtherStart = bOtherAllDay ? toUTC(0, 0) : toUTC(Number((b as any).startHour), Number((b as any).startMinute));
+          const bOtherEnd   = bOtherAllDay ? toUTC(23, 59) : toUTC(Number((b as any).endHour), Number((b as any).endMinute));
+
+          if (resOverlap(bStart, bEnd, bOtherStart, bOtherEnd)) {
+            throw new Error("Wystąpiła kolizja z istniejącą blokadą dostępności w tym terminie.");
+          }
         }
 
         return data;
