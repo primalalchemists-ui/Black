@@ -20,8 +20,8 @@ export const Resources: CollectionConfig = {
   },
   access: {
     read: isStaffOrAdmin,
-    create: isAdmin,
-    update: isAdmin,
+    create: isStaffOrAdmin,
+    update: isStaffOrAdmin,
     delete: isAdmin,
   },
   fields: [

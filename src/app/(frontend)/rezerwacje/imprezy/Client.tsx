@@ -16,7 +16,7 @@ import { ReservationStepper } from "@/components/reservations/ReservationStepper
 import { AcceptRulesCard } from "@/components/reservations/AcceptRulesCard";
 import { ErrorSlot } from "@/components/forms/ErrorSlot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Phone } from "lucide-react";
 import { ServerErrorMessage } from "@/components/reservations/ServerErrorMessage";
 
 import { imprezaRequestSchema, type ImprezaRequest } from "@/lib/validation/reservations";
@@ -58,6 +58,7 @@ function parseCapacity(label: string | null): number | null {
 
 interface Props {
   initialEventId?: string;
+  phone?: string;
 }
 
 function doCancel(sessionId: string): void {
@@ -85,7 +86,7 @@ function sendBeaconCancel(sessionId: string): void {
   } catch {}
 }
 
-export default function ImprezaClient({ initialEventId }: Props) {
+export default function ImprezaClient({ initialEventId, phone }: Props) {
   const router = useRouter();
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -440,6 +441,23 @@ export default function ImprezaClient({ initialEventId }: Props) {
             </AnimatePresence>
           </CardContent>
         </Card>
+
+      ) : null}
+
+      {step === 1 && phone ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-[hsl(var(--brand)/0.35)] bg-card px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-lg font-semibold">Chcesz zorganizować imprezę?</div>
+            <p className="mt-1 text-sm text-muted-foreground">Zadzwoń — omówimy szczegóły i termin.</p>
+          </div>
+          <a
+            href={`tel:${phone}`}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Phone aria-hidden="true" className="h-4 w-4" />
+            {phone}
+          </a>
+        </div>
       ) : null}
 
       {step === 2 ? (

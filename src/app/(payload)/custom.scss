@@ -628,4 +628,120 @@
     &--rejected    { background: rgba(239,68,68,0.12);  color: #b91c1c; }
     &--planned     { background: rgba(34,197,94,0.15);  color: #15803d; }
   }
+
+  // Zakończ przeszłe rezerwacje
+  &__complete-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  &__complete-empty {
+    font-size: 0.82rem;
+    color: var(--theme-text);
+    opacity: 0.4;
+  }
+
+  &__complete-btn {
+    padding: 0.4rem 1rem;
+    border: 1px solid var(--theme-border-color);
+    background-color: var(--theme-elevation-0);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--theme-text);
+    font-weight: 500;
+    transition: opacity 0.12s;
+
+    &:hover {
+      opacity: 0.75;
+    }
+  }
+
+  // Modal
+  &__modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  &__modal {
+    background: var(--theme-bg);
+    border: 1px solid var(--theme-border-color);
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 420px;
+    width: calc(100% - 2rem);
+  }
+
+  &__modal-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--theme-text);
+    margin: 0 0 0.75rem;
+  }
+
+  &__modal-body {
+    font-size: 0.9rem;
+    color: var(--theme-text);
+    opacity: 0.8;
+    margin: 0 0 1.5rem;
+    line-height: 1.5;
+  }
+
+  &__modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  &__modal-cancel {
+    padding: 0.5rem 1.1rem;
+    border: 1px solid var(--theme-border-color);
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--theme-text);
+    transition: opacity 0.12s;
+
+    &:hover:not(:disabled) { opacity: 0.7; }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+  }
+
+  &__modal-confirm {
+    padding: 0.5rem 1.2rem;
+    border: none;
+    background: var(--theme-text);
+    color: var(--theme-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: opacity 0.12s;
+
+    &:hover:not(:disabled) { opacity: 0.8; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+
+  // Toast
+  &__toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--theme-text);
+    color: var(--theme-bg);
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 2000;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
 }

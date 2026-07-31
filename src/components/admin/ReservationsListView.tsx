@@ -153,8 +153,49 @@ export function ReservationsListView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const [pastCount, setPastCount] = useState<number | null>(null)
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [completeToast, setCompleteToast] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
   const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fetchPastCount = () => {
+    if (!token) return
+    fetch("/api/reservations/complete-past", {
+      headers: { Authorization: `JWT ${token}` },
+    })
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setPastCount(j.count) })
+      .catch(() => {})
+  }
+
+  useEffect(() => { fetchPastCount() }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleCompletePast() {
+    setCompleting(true)
+    try {
+      const res = await fetch("/api/reservations/complete-past", {
+        method: "POST",
+        headers: { Authorization: `JWT ${token}` },
+      })
+      const json = await res.json()
+      if (json.ok) {
+        setCompleteToast(`Oznaczono ${json.updated} rezerwacji jako zakończone.`)
+        setTimeout(() => setCompleteToast(null), 4000)
+        fetchPastCount()
+        setPage(1)
+        setRefreshKey((k) => k + 1)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCompleting(false)
+      setShowCompleteModal(false)
+    }
+  }
 
   useEffect(() => {
     if (!token) return
@@ -183,7 +224,7 @@ export function ReservationsListView() {
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, search, typeFilter, dateFilter, customDate, statusFilter, paymentFilter, page, limit])
+  }, [token, search, typeFilter, dateFilter, customDate, statusFilter, paymentFilter, page, limit, refreshKey])
 
   const handleType    = (v: TypeFilter)    => { setPage(1); setTypeFilter(v) }
   const handleDate    = (v: DateFilter)    => { setPage(1); setDateFilter(v); if (v !== "custom") setCustomDate("") }
@@ -258,6 +299,55 @@ export function ReservationsListView() {
       </div>
 
       <div className="black-admin-list__divider" />
+
+      <div className="black-admin-list__complete-row">
+        {pastCount === null ? null : pastCount === 0 ? (
+          <span className="black-admin-list__complete-empty">Brak przeszłych rezerwacji do zakończenia</span>
+        ) : (
+          <button
+            type="button"
+            className="black-admin-list__complete-btn"
+            onClick={() => setShowCompleteModal(true)}
+          >
+            Zakończ przeszłe rezerwacje ({pastCount})
+          </button>
+        )}
+      </div>
+
+      {showCompleteModal && (
+        <div className="black-admin-list__modal-overlay" onClick={() => !completing && setShowCompleteModal(false)}>
+          <div className="black-admin-list__modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="black-admin-list__modal-title">Oznaczyć przeszłe rezerwacje jako zakończone?</h2>
+            <p className="black-admin-list__modal-body">
+              Status {pastCount} przeszłych rezerwacji zostanie zmieniony z{" "}
+              <strong>Potwierdzone</strong> na <strong>Zakończone</strong>.
+            </p>
+            <div className="black-admin-list__modal-actions">
+              <button
+                type="button"
+                className="black-admin-list__modal-cancel"
+                onClick={() => setShowCompleteModal(false)}
+                disabled={completing}
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                className="black-admin-list__modal-confirm"
+                onClick={handleCompletePast}
+                disabled={completing}
+              >
+                {completing ? "Oznaczanie…" : "Oznacz jako zakończone"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {completeToast && (
+        <div className="black-admin-list__toast">{completeToast}</div>
+      )}
+
       {error && <div className="black-admin-list__error">{error}</div>}
 
       {loading ? (
