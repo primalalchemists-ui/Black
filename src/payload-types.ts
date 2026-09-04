@@ -154,9 +154,6 @@ export interface Reservation {
     email?: string | null;
   };
   notes?: string | null;
-  /**
-   * Widoczna tylko dla obsługi. Wypełniana automatycznie przy problemach z płatnością.
-   */
   internalNote?: string | null;
   day: string;
   allDay?: boolean | null;
@@ -251,9 +248,6 @@ export interface Reservation {
   paymentStatus?:
     | ('not_required' | 'pending' | 'verifying' | 'paid' | 'failed' | 'expired' | 'refunded' | 'forfeited')
     | null;
-  /**
-   * Informacja techniczna/historyczna. Rekordy sprzed wdrożenia tego pola mają wartość pustą.
-   */
   cancellationReason?:
     | ('payment_expired' | 'payment_failed' | 'cancelled_by_customer' | 'cancelled_by_staff' | 'cancelled_by_system')
     | null;

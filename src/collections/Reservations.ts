@@ -450,9 +450,6 @@ export const Reservations: CollectionConfig = {
       name: "internalNote",
       label: "Notatka wewnętrzna",
       type: "textarea",
-      admin: {
-        description: "Widoczna tylko dla obsługi. Wypełniana automatycznie przy problemach z płatnością.",
-      },
     },
 
     {
@@ -783,9 +780,11 @@ export const Reservations: CollectionConfig = {
         { label: "Anulowane przez system", value: "cancelled_by_system" },
       ],
       admin: {
-        condition: (data) => data?.status === "cancelled",
-        description:
-          "Informacja techniczna/historyczna. Rekordy sprzed wdrożenia tego pola mają wartość pustą.",
+        // Pole systemowe — wypełniane automatycznie (payment_expired,
+        // payment_failed, cancelled_by_system). Ukryte w panelu: obsługa go
+        // nie widzi ani nie edytuje ręcznie. Zapis/odczyt przez API i logikę
+        // aplikacji działa normalnie.
+        hidden: true,
       },
     },
     {
