@@ -17,7 +17,7 @@ type Payment = {
 
 type ApiResult = { docs: Payment[]; totalDocs: number; totalPages: number; page: number }
 
-type StatusFilter = "all" | "pending" | "paid" | "failed" | "refunded"
+type StatusFilter = "all" | "pending" | "paid" | "failed" | "expired" | "refunded"
 type DateFilter = "all" | "today" | "yesterday" | "week" | "custom"
 type TypeFilter = "all" | "kregle" | "bilard" | "impreza" | "biznes"
 
@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "Oczekuje",
   paid: "Opłacone",
   failed: "Nieudane",
+  expired: "Wygasła",
   refunded: "Zwrócone",
 }
 
@@ -33,6 +34,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "pending", label: "Oczekuje" },
   { value: "paid", label: "Opłacone" },
   { value: "failed", label: "Nieudane" },
+  { value: "expired", label: "Wygasłe" },
   { value: "refunded", label: "Zwrócone" },
 ]
 

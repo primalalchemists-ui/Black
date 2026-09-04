@@ -239,6 +239,8 @@ export async function GET(req: Request) {
   const dayStartISO = startOfDay(date).toISOString();
   const dayEndISO = endOfDay(date).toISOString();
 
+  const nowISO = new Date().toISOString();
+
   const existing = await payload.find({
     collection: "reservations",
     limit: 2000,
@@ -249,6 +251,16 @@ export async function GET(req: Request) {
         { status: { not_equals: "no_show" } },
         { startsAt: { less_than: dayEndISO } },
         { endsAt: { greater_than: dayStartISO } },
+        // wyklucz wygasłe oczekujące na płatność — slot zwalnia się po
+        // expiresAt (15 min), NIEZALEŻNIE od tego, czy cleanup zdążył już
+        // zmienić status rekordu. Ta sama klauzula co w routach rezerwacji.
+        {
+          or: [
+            { paymentStatus: { not_equals: "pending" } },
+            { expiresAt: { exists: false } },
+            { expiresAt: { greater_than_equal: nowISO } },
+          ],
+        } as any,
       ],
     },
   });

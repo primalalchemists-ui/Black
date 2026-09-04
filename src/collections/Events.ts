@@ -64,6 +64,16 @@ export const Events: CollectionConfig = {
               and: [
                 { event: { equals: doc.id } },
                 { status: { in: ['new', 'confirmed'] } },
+                // wyklucz wygasłe oczekujące na płatność — miejsce zwalnia się
+                // po expiresAt, niezależnie od tego, czy cleanup zdążył zmienić
+                // status rekordu. Spójne z POST /api/reservations/{impreza,biznes}.
+                {
+                  or: [
+                    { paymentStatus: { not_equals: 'pending' } },
+                    { expiresAt: { exists: false } },
+                    { expiresAt: { greater_than_equal: new Date().toISOString() } },
+                  ],
+                } as any,
               ],
             },
           })

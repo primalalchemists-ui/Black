@@ -12,6 +12,8 @@ import * as migration_20260712_add_expires_at_to_reservations from './20260712_a
 import * as migration_20260712_add_internal_note_to_reservations from './20260712_add_internal_note_to_reservations';
 import * as migration_20260716_add_verifying_to_payment_status from './20260716_add_verifying_to_payment_status';
 import * as migration_20260716_unique_payment_session from './20260716_unique_payment_session';
+import * as migration_20260904_add_expired_payment_status from './20260904_add_expired_payment_status';
+import * as migration_20260904_add_cancellation_reason from './20260904_add_cancellation_reason';
 
 export const migrations = [
   {
@@ -83,5 +85,15 @@ export const migrations = [
     up: migration_20260716_unique_payment_session.up,
     down: migration_20260716_unique_payment_session.down,
     name: '20260716_unique_payment_session',
+  },
+  {
+    up: migration_20260904_add_expired_payment_status.up,
+    down: migration_20260904_add_expired_payment_status.down,
+    name: '20260904_add_expired_payment_status',
+  },
+  {
+    up: migration_20260904_add_cancellation_reason.up,
+    down: migration_20260904_add_cancellation_reason.down,
+    name: '20260904_add_cancellation_reason',
   },
 ];

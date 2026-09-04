@@ -3,7 +3,7 @@ import type { CollectionConfig } from 'payload'
 const isAdmin = ({ req }: any) => req.user?.role === 'admin'
 const isStaffOrAdmin = ({ req }: any) => ['admin', 'staff'].includes(req.user?.role)
 
-type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
+type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded'
 
 const mapPaymentToReservationStatus = (s: PaymentStatus) => {
   switch (s) {
@@ -13,6 +13,8 @@ const mapPaymentToReservationStatus = (s: PaymentStatus) => {
       return 'pending'
     case 'failed':
       return 'failed'
+    case 'expired':
+      return 'expired'
     case 'refunded':
       return 'refunded'
     default:
@@ -46,6 +48,13 @@ export const Payments: CollectionConfig = {
     afterChange: [
       async ({ doc, req }) => {
         if (!doc?.reservation) return
+
+        // context.skipPaymentSync: wywołujący sam ustawił już poprawny
+        // reservation.paymentStatus i ta synchronizacja tylko by go nadpisała.
+        // Używane przez wygaszanie nieopłaconych rezerwacji
+        // (src/lib/reservationExpiry.ts) — bez tego guardu hook cofnąłby
+        // świeżo ustawione 'expired'.
+        if ((req.context as any)?.skipPaymentSync) return
 
         const reservationId =
           typeof doc.reservation === 'string' ? doc.reservation : (doc.reservation as any).id
@@ -96,6 +105,7 @@ export const Payments: CollectionConfig = {
         { label: 'Oczekuje', value: 'pending' },
         { label: 'Opłacona', value: 'paid' },
         { label: 'Nieudana', value: 'failed' },
+        { label: 'Wygasła', value: 'expired' },
         { label: 'Zwrócona', value: 'refunded' },
       ],
     },

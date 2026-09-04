@@ -24,7 +24,7 @@ type ApiResult = { docs: Reservation[]; totalDocs: number; totalPages: number; p
 type TypeFilter    = "all" | "stolik" | "kregle" | "bilard" | "biznes" | "impreza"
 type DateFilter    = "all" | "today" | "tomorrow" | "weekend" | "custom"
 type StatusFilter  = "all" | "new" | "confirmed" | "cancelled" | "no_show" | "completed"
-type PaymentFilter = "all" | "not_required" | "pending" | "paid" | "failed"
+type PaymentFilter = "all" | "not_required" | "pending" | "paid" | "failed" | "expired"
 
 const TYPE_LABELS: Record<string, string> = {
   stolik: "Stolik", kregle: "Kręgle", bilard: "Bilard", biznes: "Biznes", impreza: "Impreza",
@@ -36,7 +36,8 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
-  not_required: "—", pending: "Oczekuje", paid: "Opłacone", failed: "Nieudane",
+  not_required: "—", pending: "Oczekuje", verifying: "Weryfikacja",
+  paid: "Opłacone", failed: "Nieudane", expired: "Wygasła",
   refunded: "Zwrócono", forfeited: "Przepadło",
 }
 
@@ -61,7 +62,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 const PAYMENT_FILTERS: { value: PaymentFilter; label: string }[] = [
   { value: "all", label: "Wszystkie" }, { value: "not_required", label: "Nie wymaga" },
   { value: "pending", label: "Oczekuje" }, { value: "paid", label: "Opłacone" },
-  { value: "failed", label: "Nieudane" },
+  { value: "failed", label: "Nieudane" }, { value: "expired", label: "Wygasłe" },
 ]
 
 function toWarsawDate(d: Date): string {
@@ -161,6 +162,7 @@ export function ReservationsListView() {
 
   const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sweepRanRef = useRef(false)
 
   const fetchPastCount = () => {
     if (!token) return
@@ -173,6 +175,23 @@ export function ReservationsListView() {
   }
 
   useEffect(() => { fetchPastCount() }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sweep wygasłych rezerwacji — raz na wejście/odświeżenie listy.
+  // Nie blokuje pierwszego renderu: lista ładuje się równolegle, a jeśli sweep
+  // faktycznie coś zmienił, odświeżamy ją przez refreshKey.
+  // Porażka sweepa jest celowo cicha — dostępność slotów od niego nie zależy.
+  useEffect(() => {
+    if (!token || sweepRanRef.current) return
+    sweepRanRef.current = true
+
+    fetch("/api/reservations/expire-pending", {
+      method: "POST",
+      headers: { Authorization: `JWT ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.ok && j.updated > 0) setRefreshKey((k) => k + 1) })
+      .catch(() => {})
+  }, [token])
 
   async function handleCompletePast() {
     setCompleting(true)

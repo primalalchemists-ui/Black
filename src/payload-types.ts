@@ -248,7 +248,15 @@ export interface Reservation {
   status: 'new' | 'confirmed' | 'cancelled' | 'no_show' | 'completed';
   depositRequired?: boolean | null;
   depositAmount?: number | null;
-  paymentStatus?: ('not_required' | 'pending' | 'verifying' | 'paid' | 'failed' | 'refunded' | 'forfeited') | null;
+  paymentStatus?:
+    | ('not_required' | 'pending' | 'verifying' | 'paid' | 'failed' | 'expired' | 'refunded' | 'forfeited')
+    | null;
+  /**
+   * Informacja techniczna/historyczna. Rekordy sprzed wdrożenia tego pola mają wartość pustą.
+   */
+  cancellationReason?:
+    | ('payment_expired' | 'payment_failed' | 'cancelled_by_customer' | 'cancelled_by_staff' | 'cancelled_by_system')
+    | null;
   paymentProvider?: 'p24' | null;
   payment?: (number | null) | Payment;
   groupId?: string | null;
@@ -379,7 +387,7 @@ export interface Media {
 export interface Payment {
   id: number;
   provider: 'p24';
-  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'refunded';
   amount: number;
   currency?: string | null;
   p24SessionId?: string | null;
@@ -777,6 +785,7 @@ export interface ReservationsSelect<T extends boolean = true> {
   depositRequired?: T;
   depositAmount?: T;
   paymentStatus?: T;
+  cancellationReason?: T;
   paymentProvider?: T;
   payment?: T;
   groupId?: T;

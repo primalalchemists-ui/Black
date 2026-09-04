@@ -55,10 +55,21 @@ export async function confirmGroupPayment(
     })
     const paymentDoc: any = (paymentResult.docs as any[])[0] ?? null
 
+    // Stan sprzed weryfikacji, per dokument — potrzebny do WIERNEGO revertu,
+    // gdy P24 odrzuci transakcję. Wcześniej revert ustawiał wszystkim docs
+    // "pending", co (a) wskrzeszałoby rekord wygasły jako pending mimo statusu
+    // cancelled, (b) w grupie mieszanej cofałoby rekord już opłacony.
+    // Zapisujemy tylko paymentStatus — `status` nie jest tu w ogóle zmieniany.
+    const priorPaymentStatus = new Map<string, string>()
+
     if (!opts?.skipP24Verify) {
-      // Set verifying BEFORE P24 HTTP call — blocks cancel from deleting
+      // Set verifying BEFORE P24 HTTP call — blocks cancel from deleting.
+      // "expired" również podlega weryfikacji: spóźniony webhook success musi
+      // mieć szansę odzyskać rezerwację. O bezpieczeństwo zasobu dba guard
+      // `expiresAt < now` poniżej.
       for (const doc of docs) {
-        if (doc.paymentStatus === "pending") {
+        if (doc.paymentStatus === "pending" || doc.paymentStatus === "expired") {
+          priorPaymentStatus.set(String(doc.id), doc.paymentStatus)
           await payload
             .update({
               collection: "reservations",
@@ -89,8 +100,10 @@ export async function confirmGroupPayment(
       } catch (err) {
         console.error(`[confirmGroupPayment] P24_VERIFY_ERROR sessionId=${sessionId}`, err)
         for (const doc of docs) {
+          const prior = priorPaymentStatus.get(String(doc.id))
+          if (!prior) continue
           await payload
-            .update({ collection: "reservations", id: doc.id, data: { paymentStatus: "pending" } as any, overrideAccess: true })
+            .update({ collection: "reservations", id: doc.id, data: { paymentStatus: prior } as any, overrideAccess: true })
             .catch(() => {})
         }
         return "verify_failed"
@@ -99,8 +112,10 @@ export async function confirmGroupPayment(
       if (!verified) {
         console.error(`[confirmGroupPayment] P24_VERIFY_FALSE sessionId=${sessionId}`)
         for (const doc of docs) {
+          const prior = priorPaymentStatus.get(String(doc.id))
+          if (!prior) continue
           await payload
-            .update({ collection: "reservations", id: doc.id, data: { paymentStatus: "pending" } as any, overrideAccess: true })
+            .update({ collection: "reservations", id: doc.id, data: { paymentStatus: prior } as any, overrideAccess: true })
             .catch((err) => console.error("[confirmGroupPayment] Update (revert) failed:", err))
         }
         return "verify_failed"
@@ -136,6 +151,16 @@ export async function confirmGroupPayment(
               { status: { in: ["new", "confirmed"] } },
               { startsAt: { less_than: doc.endsAt } },
               { endsAt: { greater_than: doc.startsAt } },
+              // wyklucz wygasłe oczekujące na płatność — cudzy hold, który już
+              // wygasł, nie zajmuje zasobu (nawet jeśli sweep go jeszcze nie
+              // przestawił), więc nie może wywołać fałszywego manual review
+              {
+                or: [
+                  { paymentStatus: { not_equals: "pending" } },
+                  { expiresAt: { exists: false } },
+                  { expiresAt: { greater_than_equal: now.toISOString() } },
+                ],
+              } as any,
             ],
           },
         })
@@ -260,7 +285,11 @@ export async function confirmGroupPayment(
         await payload.update({
           collection: "reservations",
           id: doc.id,
-          data: { paymentStatus: "paid", status: "confirmed" } as any,
+          // cancellationReason: null — jeśli rekord został wcześniej wygaszony
+          // (payment_expired), a płatność jednak doszła i zasób jest wolny,
+          // rezerwacja wraca do życia bez śladu po anulowaniu.
+          // Dla rekordów, które nigdy nie były anulowane, to no-op.
+          data: { paymentStatus: "paid", status: "confirmed", cancellationReason: null } as any,
           overrideAccess: true,
         })
         console.log(

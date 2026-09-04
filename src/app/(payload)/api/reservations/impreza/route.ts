@@ -371,7 +371,7 @@ export async function POST(req: Request) {
                 collection: "reservations",
                 id: reservationDoc.id,
                 overrideAccess: true,
-                data: { expiresAt: abandonNow, status: "cancelled", paymentStatus: "failed" } as any,
+                data: { expiresAt: abandonNow, status: "cancelled", paymentStatus: "failed", cancellationReason: "cancelled_by_system" } as any,
               })
               resExpired = true
             } catch (e: any) {
@@ -411,7 +411,7 @@ export async function POST(req: Request) {
             collection: "reservations",
             id: reservationDoc.id,
             overrideAccess: true,
-            data: { status: "cancelled", paymentStatus: "failed" } as any,
+            data: { status: "cancelled", paymentStatus: "failed", cancellationReason: "payment_failed" } as any,
           }).catch((e) => console.error("[impreza] rollback update failed:", e))
           return NextResponse.json({ error: "PAYMENT_ERROR", message: PAYMENT_CONTACT_MSG }, { status: 502 })
         }

@@ -1,89 +1,43 @@
 import { NextResponse } from "next/server"
 import { getPayload } from "payload"
 import config from "@payload-config"
+import { runExpirySweep } from "@/lib/reservationExpiry"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+/**
+ * Wygaszanie nieopłaconych rezerwacji — wariant dla schedulera.
+ *
+ * Scheduler NIE jest obecnie skonfigurowany (brak Railway Cron). Endpoint
+ * zostaje gotowy do włączenia: wystarczy ustawić CRON_SECRET i wskazać
+ * scheduler na ten URL. Do czasu włączenia głównym mechanizmem jest
+ * admin-only sweep: POST /api/reservations/expire-pending.
+ *
+ * Oba wejścia korzystają z DOKŁADNIE TEJ SAMEJ logiki (runExpirySweep),
+ * więc włączenie crona nie zmieni zachowania systemu.
+ *
+ * Uwaga: dostępność slotów NIE zależy od tego endpointu — wygasły hold jest
+ * pomijany w zapytaniach o dostępność na podstawie expiresAt.
+ */
 export async function POST(req: Request) {
   const secret = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret")
-  if (!secret || secret !== process.env.CRON_SECRET) {
+  if (!secret || !process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
   try {
     const payload = await getPayload({ config })
-    const now = new Date()
+    const result = await runExpirySweep(payload, { limit: 200 })
 
-    // Znajdź rezerwacje które wygasły (pending + expiresAt < now)
-    const expired = await payload.find({
-      collection: "reservations",
-      limit: 100,
-      overrideAccess: true,
-      where: {
-        and: [
-          { paymentStatus: { equals: "pending" } },
-          { expiresAt: { less_than: now.toISOString() } },
-        ],
-      },
+    return NextResponse.json({
+      ok: true,
+      updated: result.updated,
+      scanned: result.scanned,
+      skippedLocked: result.skippedLocked,
+      skippedPaymentSettled: result.skippedPaymentSettled,
+      ...(result.errors.length > 0 ? { errors: result.errors } : {}),
     })
-
-    if (expired.docs.length === 0) {
-      return NextResponse.json({ ok: true, updated: 0 })
-    }
-
-    let updated = 0
-    const errors: string[] = []
-
-    for (const doc of expired.docs as any[]) {
-      try {
-        // Zaktualizuj rezerwację: cancelled + failed
-        await payload.update({
-          collection: "reservations",
-          id: doc.id,
-          overrideAccess: true,
-          context: { skipConflictCheck: true },
-          data: {
-            status: "cancelled",
-            paymentStatus: "failed",
-          } as any,
-        })
-
-        // Zaktualizuj powiązaną płatność jeśli istnieje
-        if (doc.groupId) {
-          const payments = await payload.find({
-            collection: "payments",
-            limit: 10,
-            overrideAccess: true,
-            where: {
-              and: [
-                { p24SessionId: { equals: doc.groupId } },
-                { status: { equals: "pending" } },
-              ],
-            },
-          })
-
-          for (const pmt of payments.docs as any[]) {
-            await payload.update({
-              collection: "payments",
-              id: pmt.id,
-              overrideAccess: true,
-              context: { skipPaymentSync: true },
-              data: { status: "failed" } as any,
-            })
-          }
-        }
-
-        updated++
-        console.log(`[cron/expire] EXPIRED reservationId=${doc.id} groupId=${doc.groupId} expiresAt=${doc.expiresAt}`)
-      } catch (err: any) {
-        const msg = `id=${doc.id}: ${err?.message}`
-        errors.push(msg)
-        console.error(`[cron/expire] error ${msg}`)
-      }
-    }
-
-    return NextResponse.json({ ok: true, updated, errors: errors.length > 0 ? errors : undefined })
   } catch (err: any) {
     console.error("[cron/expire] fatal:", err?.message ?? err)
     return NextResponse.json({ ok: false, error: err?.message }, { status: 500 })

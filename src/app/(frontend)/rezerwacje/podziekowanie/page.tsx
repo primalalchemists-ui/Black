@@ -68,22 +68,25 @@ export default async function PodziekowaniePageWrapper({
         const callbackArrived = paymentCheck.docs.length > 0
 
         if (!callbackArrived) {
-          // User left P24 without paying — cancel the pending reservation immediately
+          // Klient wrócił z P24 bez ukończonej płatności.
+          //
+          // Ta strona NIE mutuje bazy — jest server-renderowanym GET-em.
+          // Rekord i jego reservationNumber zostają nienaruszone jako
+          // historia próby rezerwacji.
+          //
+          // Zwolnienie holdu robi już klient (POST /api/reservations/cancel
+          // + sendBeacon przy opuszczeniu strony płatności), a niezależnie od
+          // tego slot zwalnia się sam po expiresAt (15 min), bo zapytania
+          // o dostępność pomijają wygasłe holdy.
+          //
+          // Zmianę statusu na cancelled/expired wykona wspólny sweep
+          // (src/lib/reservationExpiry.ts) po upływie 20 min od utworzenia.
           wasAbandoned = true
-          for (const doc of docs) {
-            try {
-              await payload.delete({ collection: "reservations", id: doc.id, overrideAccess: true })
-            } catch (delErr) {
-              console.error("[podziekowanie] delete failed, cancelling:", delErr)
-              await payload.update({
-                collection: "reservations",
-                id: doc.id,
-                overrideAccess: true,
-                data: { status: "cancelled", paymentStatus: "failed" } as any,
-              }).catch(() => {})
-            }
-          }
-          docs = []
+          console.log(
+            `[podziekowanie] PAYMENT_ABANDONED sessionId=${sessionId}` +
+              ` reservationIds=${docs.map((d) => d.id).join(",")}` +
+              ` reservationNumbers=${docs.map((d) => d.reservationNumber ?? "-").join(",")}`,
+          )
         } else {
           // Callback arrived but reservation not yet updated (race condition) — re-fetch
           const refreshed = await payload.find({
@@ -189,7 +192,7 @@ export default async function PodziekowaniePageWrapper({
           </div>
           <h1 className="mb-3 text-3xl font-bold tracking-tight">Płatność nie została ukończona</h1>
           <p className="mb-8 text-muted-foreground">
-            Rezerwacja została anulowana. Możesz spróbować ponownie.
+            Rezerwacja nie została potwierdzona. Możesz spróbować ponownie.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">

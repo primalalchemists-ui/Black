@@ -764,10 +764,29 @@ export const Reservations: CollectionConfig = {
         { label: "Weryfikacja", value: "verifying" },
         { label: "Opłacone", value: "paid" },
         { label: "Nieudane", value: "failed" },
+        { label: "Wygasła", value: "expired" },
         { label: "Zwrot", value: "refunded" },
         { label: "Przepadło", value: "forfeited" },
       ],
       admin: { condition: (data) => data?.type !== "stolik" },
+    },
+    {
+      name: "cancellationReason",
+      label: "Powód anulowania",
+      type: "select",
+      required: false,
+      options: [
+        { label: "Płatność wygasła (niedokończona)", value: "payment_expired" },
+        { label: "Płatność nieudana (błąd operatora)", value: "payment_failed" },
+        { label: "Anulowane przez klienta", value: "cancelled_by_customer" },
+        { label: "Anulowane przez obsługę", value: "cancelled_by_staff" },
+        { label: "Anulowane przez system", value: "cancelled_by_system" },
+      ],
+      admin: {
+        condition: (data) => data?.status === "cancelled",
+        description:
+          "Informacja techniczna/historyczna. Rekordy sprzed wdrożenia tego pola mają wartość pustą.",
+      },
     },
     {
       name: "paymentProvider",
