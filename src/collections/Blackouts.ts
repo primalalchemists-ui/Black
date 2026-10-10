@@ -146,6 +146,10 @@ export const Blackouts: CollectionConfig = {
         // z rezerwacjami (startsAt < bEnd) nie zwracało nic.
         // Patrz src/lib/reservationIntervals.ts
         const selfRange = utcBlackoutRange(day, data as any);
+        // Nieosiągalne: dla !allDay walidacja powyżej odrzuciła już NaN
+        // i zerową długość, a dla allDay zakres jest zawsze zwracany.
+        // Zostawione jako zabezpieczenie typu — nigdy nie pomijamy tu
+        // sprawdzania kolizji dla poprawnych danych.
         if (!selfRange) return data;
         const bStart = selfRange.s;
         const bEnd = selfRange.e;

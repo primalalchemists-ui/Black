@@ -69,6 +69,16 @@ $env:NODE_OPTIONS="--no-deprecation --no-experimental-strip-types"
 pnpm exec vitest run tests/int/midnight.int.spec.ts
 ```
 
+Pełny suite (jednostkowe + oba pliki integracyjne) wymaga
+`--no-file-parallelism`. Bez tego dwa pliki integracyjne równolegle stawiają
+schemat na tej samej bazie i jeden pada na `CREATE TABLE`:
+
+```powershell
+pnpm exec vitest run --no-file-parallelism
+```
+
+Testy jednostkowe (`tests/unit`) nie potrzebują bazy ani żadnych zmiennych.
+
 ### 4. Sprzątanie
 
 ```powershell
