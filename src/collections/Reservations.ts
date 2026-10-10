@@ -1,7 +1,8 @@
 // src/collections/Reservations.ts
 import type { CollectionConfig } from "payload";
+import { APIError } from "payload";
 import { expectedResourceTypeByReservationType } from "@/lib/resourceFilters";
-import { utcSegmentInterval } from "@/lib/reservationIntervals";
+import { utcSegmentInterval, utcBlackoutRange } from "@/lib/reservationIntervals";
 import type { ReservationType } from "@/lib/resourceFilters";
 
 const isStaffOrAdmin = ({ req }: any) => ["admin", "staff"].includes(req.user?.role);
@@ -154,7 +155,25 @@ export const Reservations: CollectionConfig = {
               const startD = new Date((data as any).startsAt);
               const endD = new Date(endsAtIso);
 
-              if (endD <= startD) {
+              // Zerowa długość to błędne wejście, NIE rezerwacja całodniowa.
+              // Rolowanie takiego wejścia na następny dzień robiło z 18:00–18:00
+              // cichą rezerwację 24-godzinną — i rozjeżdżało top-level z
+              // segmentami, które (poprawnie) dają interwał zerowy.
+              // Ograniczone do typów zasobowych: tylko tam interwał decyduje
+              // o kolizjach torów/stołów. Dla całego dnia służy pole „Całodniowe”.
+              if (
+                endD.getTime() === startD.getTime() &&
+                (type === "kregle" || type === "bilard")
+              ) {
+                throw new APIError(
+                  "Koniec rezerwacji musi być inny niż początek. Dla całego dnia użyj opcji „Całodniowe”.",
+                  400,
+                  undefined,
+                  true,
+                );
+              }
+
+              if (endD < startD) {
                 // overnight event (e.g. 22:00 – 02:00) — push end to next day
                 endD.setDate(endD.getDate() + 1);
               }
@@ -393,17 +412,13 @@ export const Reservations: CollectionConfig = {
           const bRes = relIds((b as any).resources);
           if (!resources.some((id) => bRes.includes(id))) continue;
 
-          const bBase = new Date((b as any).day);
-          const by = bBase.getUTCFullYear(), bmo = bBase.getUTCMonth(), bd = bBase.getUTCDate();
-          const bAllDay = Boolean((b as any).allDay);
-          const bStart = bAllDay
-            ? new Date(Date.UTC(by, bmo, bd, 0, 0, 0, 0))
-            : new Date(Date.UTC(by, bmo, bd, Number((b as any).startHour), Number((b as any).startMinute), 0, 0));
-          const bEnd = bAllDay
-            ? new Date(Date.UTC(by, bmo, bd, 23, 59, 59, 999))
-            : new Date(Date.UTC(by, bmo, bd, Number((b as any).endHour), Number((b as any).endMinute), 0, 0));
+          // Koniec blackoutu o północy należy do następnego dnia kalendarzowego;
+          // zero-duration/NaN → null (blackout pomijany).
+          // Patrz src/lib/reservationIntervals.ts
+          const bRange = utcBlackoutRange((b as any).day, b as any);
+          if (!bRange) continue;
 
-          if (overlaps(bStart, bEnd, startsAt, endsAt)) {
+          if (overlaps(bRange.s, bRange.e, startsAt, endsAt)) {
             throw new Error("Wystąpiła kolizja z blokadą dostępności w tym terminie.");
           }
         }

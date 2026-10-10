@@ -10,6 +10,7 @@ import {
   resourceTypeForReservation,
   mapServiceForBlackout,
 } from "../_shared";
+import { localBlackoutRange } from "@/lib/reservationIntervals";
 
 type Status = "free" | "busy" | "blocked";
 
@@ -219,20 +220,12 @@ export async function GET(req: Request) {
   }
 
   function blackoutRange(dateStr: string, b: any) {
-    if (b.allDay) return { s: startOfDay(dateStr), e: endOfDay(dateStr) };
-
-    const sh = Number(b.startHour);
-    const sm = Number(b.startMinute ?? 0);
-    const eh = Number(b.endHour);
-    const em = Number(b.endMinute ?? 0);
-
-    if (!Number.isFinite(sh) || !Number.isFinite(eh)) return null;
-
-    const s = toDateAtHourMinute(dateStr, sh, sm);
-    const e = toDateAtHourMinute(dateStr, eh, em);
-    if (e <= s) return null;
-
-    return { s, e };
+    // Koniec blackoutu o północy należy do następnego dnia kalendarzowego.
+    // Poprzednio `if (e <= s) return null` cicho odrzucało taki blackout,
+    // więc blokada 22:00–00:00 nie blokowała niczego.
+    // Zero-duration nadal zwraca null (wejście nieprawidłowe).
+    // Patrz src/lib/reservationIntervals.ts
+    return localBlackoutRange(dateStr, b);
   }
 
   // EXISTING RESERVATIONS (busy)

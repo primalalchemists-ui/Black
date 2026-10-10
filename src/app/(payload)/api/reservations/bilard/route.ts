@@ -23,7 +23,7 @@ import { registerTransaction } from "@/lib/p24";
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
 import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 import { tryPaymentLock } from "@/lib/paymentLifecycle";
-import { localSegmentInterval } from "@/lib/reservationIntervals";
+import { localSegmentInterval, localBlackoutRange } from "@/lib/reservationIntervals";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -49,20 +49,12 @@ function relIds(val: any): string[] {
 }
 
 function blackoutRange(dateStr: string, b: any) {
-  if (b.allDay) return { s: startOfDay(dateStr), e: endOfDay(dateStr) };
-
-  const sh = Number(b.startHour);
-  const sm = Number(b.startMinute ?? 0);
-  const eh = Number(b.endHour);
-  const em = Number(b.endMinute ?? 0);
-
-  if (!Number.isFinite(sh) || !Number.isFinite(eh)) return null;
-
-  const start = toDateAtHourMinute(dateStr, sh, sm);
-  const end = toDateAtHourMinute(dateStr, eh, em);
-
-  if (end <= start) return null;
-  return { s: start, e: end };
+  // Koniec blackoutu o polnocy nalezy do nastepnego dnia kalendarzowego.
+  // Poprzednio `if (end <= start) return null` cicho odrzucalo taki blackout,
+  // wiec blokada 22:00-00:00 nie blokowala niczego.
+  // Zero-duration nadal zwraca null (wejscie nieprawidlowe).
+  // Patrz src/lib/reservationIntervals.ts
+  return localBlackoutRange(dateStr, b);
 }
 
 // ✅ spójny dayISO z date-only
@@ -938,17 +930,12 @@ export async function POST(req: Request) {
 
     if (b.allDay) return true;
 
-    const startH = Number(b.startHour);
-    const startM = Number(b.startMinute ?? 0);
-    const endH = Number(b.endHour);
-    const endM = Number(b.endMinute ?? 0);
+    // Koniec o polnocy -> nastepny dzien; zero-duration/NaN -> null (brak blokady).
+    // Patrz src/lib/reservationIntervals.ts
+    const range = localBlackoutRange(data.date, b);
+    if (!range) return false;
 
-    if ([startH, startM, endH, endM].some((x) => Number.isNaN(x))) return false;
-
-    const bStart = toDateAtHourMinute(data.date, startH, startM);
-    const bEnd = toDateAtHourMinute(data.date, endH, endM);
-
-    return overlaps(bStart, bEnd, startsAt, endsAt);
+    return overlaps(range.s, range.e, startsAt, endsAt);
   });
 
   if (isBlocked) {

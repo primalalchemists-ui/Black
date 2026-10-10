@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest"
 import {
   localSegmentInterval,
   utcSegmentInterval,
+  localBlackoutRange,
+  utcBlackoutRange,
   segmentEndDayOffset,
+  intervalKind,
+  isZeroDuration,
   wallMinutes,
   MINUTES_PER_DAY,
 } from "@/lib/reservationIntervals"
@@ -355,7 +359,13 @@ describe("utcSegmentInterval — ścieżka panelu administratora", () => {
         startHour: h,
         endHour: 0,
       })
-      expect(end.getTime()).toBeGreaterThan(start.getTime())
+      // h = 0 → 00:00–00:00 to zero-duration, NIE interwał 24-godzinny.
+      // h > 0 → koniec o północy należy do następnego dnia.
+      if (h === 0) {
+        expect(end.getTime()).toBe(start.getTime())
+      } else {
+        expect(end.getTime()).toBeGreaterThan(start.getTime())
+      }
     }
   })
 })
@@ -388,5 +398,114 @@ describe("kompatybilność z rekordami zapisanymi przed fiksem", () => {
     const seg: Seg = { resource: LANE_1, startHour: 22, endHour: 0 }
     expect(isSlotBusy(DAY, [seg], LANE_1, 22)).toBe(true)
     expect(isSlotBusy(DAY, [seg], LANE_1, 23)).toBe(true)
+  })
+})
+
+
+// ─── 10. Zero-duration: NIE jest rezerwacja 24-godzinna ─────────────────────
+
+describe("zero-duration jest odrozniane od przejscia przez polnoc", () => {
+  it("intervalKind klasyfikuje trzy stany", () => {
+    expect(intervalKind({ startHour: 18, endHour: 20 })).toBe("same_day")
+    expect(intervalKind({ startHour: 23, endHour: 0 })).toBe("overnight")
+    expect(intervalKind({ startHour: 22, endHour: 2 })).toBe("overnight")
+    expect(intervalKind({ startHour: 18, endHour: 18 })).toBe("zero_duration")
+    expect(intervalKind({ startHour: 0, endHour: 0 })).toBe("zero_duration")
+  })
+
+  it("isZeroDuration wykrywa rowne czasy, takze z minutami", () => {
+    expect(isZeroDuration({ startHour: 18, startMinute: 30, endHour: 18, endMinute: 30 })).toBe(true)
+    expect(isZeroDuration({ startHour: 18, startMinute: 0, endHour: 18, endMinute: 30 })).toBe(false)
+  })
+
+  it("zero-duration NIE jest rolowane na nastepny dzien", () => {
+    expect(segmentEndDayOffset({ startHour: 18, endHour: 18 })).toBe(0)
+    const { start, end } = localSegmentInterval(DAY, { startHour: 18, endHour: 18 })
+    expect(end.getTime()).toBe(start.getTime())
+    expect(end.getDate()).toBe(start.getDate())
+  })
+
+  it("zero-duration nie blokuje zadnego slotu (zamiast blokowac 24 h)", () => {
+    const segs: Seg[] = [{ resource: LANE_1, startHour: 18, endHour: 18 }]
+    for (const h of [17, 18, 19, 23]) {
+      expect(isSlotBusy(DAY, segs, LANE_1, h)).toBe(false)
+    }
+  })
+
+  it("przejscie przez polnoc nadal jest rolowane", () => {
+    expect(segmentEndDayOffset({ startHour: 23, endHour: 0 })).toBe(1)
+    expect(segmentEndDayOffset({ startHour: 22, endHour: 2 })).toBe(1)
+  })
+})
+
+// ─── 11. Zakresy blackoutow ─────────────────────────────────────────────────
+
+describe("localBlackoutRange", () => {
+  it("blackout 22:00-00:00 konczy sie nastepnego dnia", () => {
+    const r = localBlackoutRange(DAY, { startHour: "22", endHour: "0" })
+    expect(r).not.toBeNull()
+    expect(r!.s.getHours()).toBe(22)
+    expect(r!.e.getHours()).toBe(0)
+    expect(r!.e.getTime()).toBeGreaterThan(r!.s.getTime())
+    expect(r!.e.getDate()).not.toBe(r!.s.getDate())
+  })
+
+  it("zwykly blackout dzienny bez zmian", () => {
+    const r = localBlackoutRange(DAY, { startHour: "14", endHour: "16" })
+    expect(r!.s.getHours()).toBe(14)
+    expect(r!.e.getHours()).toBe(16)
+    expect(r!.e.getDate()).toBe(r!.s.getDate())
+  })
+
+  it("allDay obejmuje caly dzien", () => {
+    const r = localBlackoutRange(DAY, { allDay: true })
+    expect(r!.s.getHours()).toBe(0)
+    expect(r!.e.getHours()).toBe(23)
+    expect(r!.e.getMinutes()).toBe(59)
+  })
+
+  it("zero-duration zwraca null", () => {
+    expect(localBlackoutRange(DAY, { startHour: "20", endHour: "20" })).toBeNull()
+  })
+
+  it("nieprawidlowe godziny zwracaja null", () => {
+    expect(localBlackoutRange(DAY, { startHour: "abc", endHour: "16" })).toBeNull()
+    expect(localBlackoutRange(DAY, { startHour: "14", endHour: undefined })).toBeNull()
+  })
+
+  it("blackout 22:00-00:00 pokrywa sloty 22:00 i 23:00, ale nie 21:00", () => {
+    const r = localBlackoutRange(DAY, { startHour: "22", endHour: "0" })!
+    const covers = (h: number) => {
+      const slot = hourSlot(DAY, h)
+      return overlaps(r.s, r.e, slot.start, slot.end)
+    }
+    expect(covers(21)).toBe(false)
+    expect(covers(22)).toBe(true)
+    expect(covers(23)).toBe(true)
+  })
+
+  it("blackout konczacy sie o polnocy w ostatnim dniu roku", () => {
+    const r = localBlackoutRange("2026-12-31", { startHour: "22", endHour: "0" })!
+    expect(r.e.getFullYear()).toBe(2027)
+    expect(r.e.getMonth()).toBe(0)
+    expect(r.e.getDate()).toBe(1)
+  })
+})
+
+describe("utcBlackoutRange", () => {
+  it("22:00-00:00 w UTC", () => {
+    const r = utcBlackoutRange("2026-10-10T00:00:00.000Z", { startHour: "22", endHour: "0" })!
+    expect(r.s.toISOString()).toBe("2026-10-10T22:00:00.000Z")
+    expect(r.e.toISOString()).toBe("2026-10-11T00:00:00.000Z")
+  })
+
+  it("allDay w UTC obejmuje caly dzien", () => {
+    const r = utcBlackoutRange("2026-10-10T00:00:00.000Z", { allDay: true })!
+    expect(r.s.toISOString()).toBe("2026-10-10T00:00:00.000Z")
+    expect(r.e.toISOString()).toBe("2026-10-10T23:59:59.999Z")
+  })
+
+  it("zero-duration zwraca null", () => {
+    expect(utcBlackoutRange("2026-10-10T00:00:00.000Z", { startHour: "20", endHour: "20" })).toBeNull()
   })
 })

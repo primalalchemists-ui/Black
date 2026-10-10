@@ -120,7 +120,11 @@ export default buildConfig({
     pool: {
       connectionString: DATABASE_URL,
     },
-    push: false,
+    // Produkcja i development: ZAWSZE false — schemat zmieniają wyłącznie
+    // migracje z src/migrations. Włączane tylko przez testy integracyjne,
+    // które stawiają schemat na własnej, izolowanej bazie
+    // (payload migrate nie działa na Windows + Node 24: ERR_UNSUPPORTED_ESM_URL_SCHEME).
+    push: process.env.PAYLOAD_DB_PUSH === 'true',
   }),
 
   plugins: [
