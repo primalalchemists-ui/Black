@@ -23,6 +23,7 @@ import { registerTransaction } from "@/lib/p24";
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
 import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
 import { tryPaymentLock } from "@/lib/paymentLifecycle";
+import { localSegmentInterval } from "@/lib/reservationIntervals";
 
 type CellStatus = "free" | "busy" | "blocked";
 
@@ -241,8 +242,9 @@ export async function GET(req: Request) {
         return rSegs.some((seg: any) => {
           const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""))
           if (segResId !== args.resourceId) return false
-          const segStart = toDateAtHourMinute(date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0))
-          const segEnd = toDateAtHourMinute(date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0))
+          // Koniec segmentu o północy należy do następnego dnia — patrz
+          // src/lib/reservationIntervals.ts
+          const { start: segStart, end: segEnd } = localSegmentInterval(date, seg)
           return overlaps(segStart, segEnd, args.slotStart, args.slotEnd)
         })
       }
@@ -662,8 +664,9 @@ export async function POST(req: Request) {
             return rSegs.some((seg: any) => {
               const segResId = String(typeof seg.resource === "object" ? (seg.resource?.id ?? seg.resource) : (seg.resource ?? ""));
               if (segResId !== resourceId) return false;
-              const segStart = toDateAtHourMinute(data.date, Number(seg.startHour ?? 0), Number(seg.startMinute ?? 0));
-              const segEnd = toDateAtHourMinute(data.date, Number(seg.endHour ?? 0), Number(seg.endMinute ?? 0));
+              // Koniec segmentu o północy należy do następnego dnia — patrz
+              // src/lib/reservationIntervals.ts
+              const { start: segStart, end: segEnd } = localSegmentInterval(data.date, seg);
               return overlaps(segStart, segEnd, startsAt, endsAt);
             });
           }

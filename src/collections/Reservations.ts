@@ -1,6 +1,7 @@
 // src/collections/Reservations.ts
 import type { CollectionConfig } from "payload";
 import { expectedResourceTypeByReservationType } from "@/lib/resourceFilters";
+import { utcSegmentInterval } from "@/lib/reservationIntervals";
 import type { ReservationType } from "@/lib/resourceFilters";
 
 const isStaffOrAdmin = ({ req }: any) => ["admin", "staff"].includes(req.user?.role);
@@ -290,13 +291,9 @@ export const Reservations: CollectionConfig = {
           return "";
         }
 
-        function segToDate(dayIso: any, hour: unknown, minute: unknown): Date {
-          const base = new Date(dayIso);
-          const y = base.getUTCFullYear();
-          const m = base.getUTCMonth();
-          const d = base.getUTCDate();
-          return new Date(Date.UTC(y, m, d, Number(hour ?? 0), Number(minute ?? 0), 0, 0));
-        }
+        // Rekonstrukcja interwału segmentu: utcSegmentInterval z
+        // src/lib/reservationIntervals.ts (obsługuje koniec o północy,
+        // który należy do następnego dnia kalendarzowego).
 
         const incomingSegments: any[] = Array.isArray(incoming.segments)
           ? (incoming.segments as any[]).filter((s: any) => s?.resource != null)
@@ -309,8 +306,7 @@ export const Reservations: CollectionConfig = {
           for (const seg of incomingSegments) {
             const resId = getResId(seg.resource);
             if (!resId) continue;
-            const start = segToDate(incomingDay, seg.startHour, seg.startMinute);
-            const end = segToDate(incomingDay, seg.endHour, seg.endMinute);
+            const { start, end } = utcSegmentInterval(incomingDay, seg);
             if (!incomingByRes.has(resId)) incomingByRes.set(resId, []);
             incomingByRes.get(resId)!.push({ start, end });
           }
@@ -330,8 +326,7 @@ export const Reservations: CollectionConfig = {
                 const resId = getResId(rSeg.resource);
                 const inTimes = incomingByRes.get(resId);
                 if (!inTimes) continue;
-                const rStart = segToDate(rDay, rSeg.startHour, rSeg.startMinute);
-                const rEnd = segToDate(rDay, rSeg.endHour, rSeg.endMinute);
+                const { start: rStart, end: rEnd } = utcSegmentInterval(rDay, rSeg);
                 for (const inTime of inTimes) {
                   if (overlaps(rStart, rEnd, inTime.start, inTime.end)) {
                     throw new Error("Wystąpiła kolizja z inną rezerwacją w tym terminie.");
