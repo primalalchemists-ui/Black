@@ -2,6 +2,9 @@
 
 Dotyczy projektu `Black-Staging` (serwis `Black-App-Staging` + serwis `Postgres`).
 
+Ochronę dostępu do środowiska i replikację treści opisuje
+[STAGING-ACCESS.md](./STAGING-ACCESS.md).
+
 ## Skrót
 
 Migracje uruchamia **komenda Pre-deploy**:
