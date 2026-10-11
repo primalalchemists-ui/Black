@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPayload } from "payload"
 import config from "@payload-config"
+import { internalFetchHeaders } from "@/lib/stagingAccess"
 
 export async function GET() {
   const payload = await getPayload({ config })
@@ -38,7 +39,10 @@ export async function GET() {
       ? pdfUrl
       : `${origin}${pdfUrl.startsWith("/") ? "" : "/"}${pdfUrl}`
 
-    const upstream = await fetch(absoluteUrl)
+    // Naglowek bramki stagingowej TYLKO dla wlasnego origin. Gdy plik lezy
+    // w S3 (pdfUrl zaczyna sie od http), nie wysylamy klucza do obcego hosta.
+    const sameOrigin = !pdfUrl.startsWith("http")
+    const upstream = await fetch(absoluteUrl, sameOrigin ? { headers: internalFetchHeaders() } : undefined)
 
     if (!upstream.ok || !upstream.body) {
       return new NextResponse("<h1>Nie udało się pobrać PDF</h1>", { status: 502 })

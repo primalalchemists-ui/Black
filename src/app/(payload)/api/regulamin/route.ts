@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPayload } from "payload"
 import config from "@payload-config"
+import { internalFetchHeaders } from "@/lib/stagingAccess"
 
 export async function GET() {
   const payload = await getPayload({ config })
@@ -42,7 +43,10 @@ export async function GET() {
     const origin = (process.env.PAYLOAD_URL || "http://localhost:3000").replace(/\/$/, "")
     const absoluteUrl = pdfUrl.startsWith("http") ? pdfUrl : `${origin}${pdfUrl.startsWith("/") ? "" : "/"}${pdfUrl}`
 
-    const upstream = await fetch(absoluteUrl)
+    // Naglowek bramki stagingowej TYLKO dla wlasnego origin. Gdy plik lezy
+    // w S3 (pdfUrl zaczyna sie od http), nie wysylamy klucza do obcego hosta.
+    const sameOrigin = !pdfUrl.startsWith("http")
+    const upstream = await fetch(absoluteUrl, sameOrigin ? { headers: internalFetchHeaders() } : undefined)
 
     if (!upstream.ok || !upstream.body) {
       return new NextResponse(

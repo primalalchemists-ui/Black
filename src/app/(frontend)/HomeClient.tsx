@@ -1,5 +1,6 @@
 import HomePageClient from "@/components/home/HomePageClient"
 import { headers } from "next/headers"
+import { internalFetchHeaders } from "@/lib/stagingAccess"
 
 async function getSiteSettings() {
   // bierzemy aktualny host z requestu — działa i lokalnie, i na Railway
@@ -11,6 +12,8 @@ async function getSiteSettings() {
   const baseUrl = `${protocol}://${host}`
 
   const res = await fetch(`${baseUrl}/api/globals/site-settings`, {
+    // Patrz komentarz w src/lib/siteSettings.ts — bramka stagingowa.
+    headers: internalFetchHeaders(),
     next: { revalidate: 60 },
   })
 
