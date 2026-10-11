@@ -7,6 +7,8 @@ import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
+import { shouldPushSchema } from './lib/dbSafety'
+
 import { Users } from './collections/Users'
 import { Media } from './collections/Media'
 import { Events } from './collections/Events'
@@ -121,10 +123,13 @@ export default buildConfig({
       connectionString: DATABASE_URL,
     },
     // Produkcja i development: ZAWSZE false — schemat zmieniają wyłącznie
-    // migracje z src/migrations. Włączane tylko przez testy integracyjne,
-    // które stawiają schemat na własnej, izolowanej bazie
-    // (payload migrate nie działa na Windows + Node 24: ERR_UNSUPPORTED_ESM_URL_SCHEME).
-    push: process.env.PAYLOAD_DB_PUSH === 'true',
+    // migracje z src/migrations.
+    //
+    // Push wymaga JEDNOCZEŚNIE: NODE_ENV === 'test', PAYLOAD_DB_PUSH === 'true'
+    // oraz LOKALNEJ bazy. Trzeci warunek sprawia, że samo ustawienie
+    // PAYLOAD_DB_PUSH=true na zdalnym środowisku niczego nie włączy.
+    // Szczegóły i uzasadnienie: src/lib/dbSafety.ts
+    push: shouldPushSchema(),
   }),
 
   plugins: [

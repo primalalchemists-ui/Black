@@ -7,13 +7,40 @@ budują tylko żądania i czytają odpowiedzi.
 
 ## Bezpieczeństwo
 
-Suite **przerywa się z błędem**, jeśli:
+Testy wymagają `PAYLOAD_DB_PUSH=true`, czyli pozwalają Payloadowi **zmienić
+schemat** bazy. Dlatego wybór bazy jest walidowany **strukturalnie**, a nie
+dopasowaniem podciągiem. Bramka
+(`tests/helpers/isolatedTestDatabase.ts` + `src/lib/dbSafety.ts`) przerywa
+działanie **przed** `getPayload`, czyli przed jakimkolwiek połączeniem, zmianą
+schematu i utworzeniem danych, jeśli którykolwiek warunek nie jest spełniony:
 
-- `DATABASE_URL` nie wskazuje bazy o nazwie zawierającej `black_midnight_test`,
-- `PAYLOAD_DB_PUSH` nie jest ustawione na `true`.
+| Warunek | Wymagane |
+|---|---|
+| `NODE_ENV` | dokładnie `test` (Vitest ustawia sam) |
+| `PAYLOAD_DB_PUSH` | dokładnie `true` (nie `1`, nie `TRUE`) |
+| Protokół | `postgres:` albo `postgresql:` |
+| Host | wyłącznie `127.0.0.1`, `localhost` lub `::1` |
+| Nazwa bazy | dokładnie `black_midnight_test` (po zdekodowaniu URL-a) |
+| Parametry połączenia | tylko `sslmode`, `application_name`, `connect_timeout` |
 
-Dzięki temu nie da się ich przypadkiem uruchomić na bazie dev ani produkcyjnej.
-Nigdy nie używaj do nich poświadczeń produkcyjnych.
+Dlaczego dopasowanie podciągiem nie wystarczało — wszystkie te URL-e
+przechodziły starą bramkę, a celowały w inną bazę:
+
+```
+postgresql://u:black_midnight_test@prod.example.com/produkcja      # w haśle
+postgresql://u:p@black_midnight_test.example.com/produkcja         # w hoście
+postgresql://u:p@127.0.0.1/produkcja?application_name=black_midnight_test
+postgresql://u:p@127.0.0.1/black_midnight_test?dbname=produkcja    # dbname NADPISUJE
+```
+
+Ostatni jest najpodstępniejszy: parametry `dbname`, `host`, `hostaddr`, `port`,
+`service` i `options` potrafią przestawić faktyczny cel połączenia — dlatego
+przechodzą tylko parametry z wąskiej listy dozwolonych.
+
+Komunikaty błędów nie zawierają surowego `DATABASE_URL`, żeby nie wypisać hasła
+do logów CI.
+
+Nigdy nie używaj do tych testów poświadczeń produkcyjnych.
 
 ## Dlaczego `PAYLOAD_DB_PUSH`
 
@@ -27,8 +54,12 @@ and node are supported by the default ESM loader. On Windows, absolute paths
 must be valid file:// URLs. Received protocol 'c:'
 ```
 
-`src/payload.config.ts` czyta `push: process.env.PAYLOAD_DB_PUSH === 'true'`,
-więc **bez tej zmiennej zachowanie produkcyjne jest niezmienione** (`false`).
+`src/payload.config.ts` czyta `push: shouldPushSchema()`, a ta funkcja wymaga
+**jednocześnie trzech** warunków: `NODE_ENV === 'test'`,
+`PAYLOAD_DB_PUSH === 'true'` oraz **lokalnej** bazy. Trzeci warunek sprawia, że
+ustawienie `PAYLOAD_DB_PUSH=true` na zdalnym środowisku (np. na Railway)
+**niczego nie włączy** — push na zdalny schemat jest strukturalnie niemożliwy.
+Produkcyjna wartość domyślna pozostaje `false`.
 
 Na Linuksie/macOS schemat można postawić normalnie:
 `DATABASE_URL=<baza testowa> pnpm payload migrate` i wtedy pominąć `PAYLOAD_DB_PUSH`.

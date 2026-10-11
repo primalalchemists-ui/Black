@@ -17,19 +17,15 @@ import config from "@payload-config"
 
 import { GET as kregleGET, POST as kreglePOST } from "@/app/(payload)/api/reservations/kregle/route"
 import { GET as bilardGET, POST as bilardPOST } from "@/app/(payload)/api/reservations/bilard/route"
+import { assertIsolatedTestDatabase } from "../helpers/isolatedTestDatabase"
 
 // ─── Bezpiecznik: nigdy nie uruchamiaj na bazie innej niż testowa ────────────
 
-const DB_URL = process.env.DATABASE_URL ?? ""
-if (!/black_midnight_test/.test(DB_URL)) {
-  throw new Error(
-    "Testy integracyjne wymagaja DATABASE_URL wskazujacego baze 'black_midnight_test'. " +
-      "Patrz tests/int/README-integration.md. Przerwano, aby nie dotknac innej bazy.",
-  )
-}
-if (process.env.PAYLOAD_DB_PUSH !== "true") {
-  throw new Error("Testy integracyjne wymagaja PAYLOAD_DB_PUSH=true (schemat na izolowanej bazie).")
-}
+// Strukturalna walidacja celu połączenia — nazwa bazy, lokalny host,
+// brak parametrów mogących przestawić cel, wymagany opt-in na push.
+// Wykonuje się przed `getPayload`, czyli przed jakimkolwiek połączeniem,
+// zmianą schematu i utworzeniem danych testowych.
+assertIsolatedTestDatabase()
 
 let payload: Awaited<ReturnType<typeof getPayload>>
 
