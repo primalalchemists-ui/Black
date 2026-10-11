@@ -176,18 +176,33 @@ nie nadpisywany. Nadpisanie wymaga jawnego `--apply --force`.
 Skrypt nigdy nie usuwa. Treść obecna w stagingu, a nieobecna w źródle, jest
 zgłaszana przez `--validate`.
 
+### Gdzie seed NIE działa
+
+**Nie da się go uruchomić w kontenerze na Railway.** Finalny obraz zawiera
+wyłącznie `server.js`, `migrate.mjs`, `public/` i `.next/` — nie ma w nim
+katalogu `scripts/`, pakietu `payload` ani `tsx`. Seed nie jest też pakowany
+esbuildem tak jak runner migracji.
+
+To jest zamierzone: seed nie uruchamia się automatycznie podczas builda, startu
+ani migracji, bo fizycznie go tam nie ma. `CMD` obrazu to `node server.js`, więc
+skrypt `start` z `package.json` (zawierający `migrate:deploy`) też nie jest
+używany.
+
 ### Uruchomienie
 
+Z lokalnego checkoutu repozytorium, celując w bazę stagingową przez **publiczny
+adres proxy** Railway (`*.proxy.rlwy.net:PORT`) — `postgres.railway.internal`
+nie jest osiągalny spoza sieci prywatnej Railway.
+
 ```bash
-DATABASE_URL=<baza stagingowa> \
-DB_ENVIRONMENT_ID=black-staging \
-pnpm exec tsx scripts/seed-staging-content.ts --dry-run    # plan, nic nie zapisuje
+DATABASE_URL='postgresql://...@<host>.proxy.rlwy.net:<port>/railway' DB_ENVIRONMENT_ID=black-staging PAYLOAD_SECRET='<sekret stagingu>' pnpm exec tsx scripts/seed-staging-content.ts --dry-run    # plan, nic nie zapisuje
 
 #   --validate   porównanie w obie strony, nic nie zapisuje
 #   --apply      wykonanie planu, wymaga dodatkowo SEED_TARGET=true
 #   --force      dopuszcza nadpisanie dokumentów obcego pochodzenia
 ```
 
+Wszystkie trzy zmienne są wymagane — bez `PAYLOAD_SECRET` Payload nie wstanie.
 `SEED_SOURCE_URL` domyślnie wskazuje `https://www.kregielnia-wielun.pl` i musi
 być adresem HTTPS.
 

@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { NextRequest } from "next/server"
 
 import { middleware } from "@/middleware"
+import { POST as stagingLogin } from "@/app/(payload)/api/staging/login/route"
+import { GET as stagingLogout } from "@/app/(payload)/api/staging/logout/route"
 import {
   STAGING_COOKIE,
   STAGING_HEADER,
@@ -10,6 +12,7 @@ import {
   internalFetchHeaders,
   isAlwaysAllowedPath,
   isStagingProtectionEnabled,
+  stagingLoginPageHtml,
 } from "@/lib/stagingAccess"
 
 /**
@@ -276,5 +279,57 @@ describe("tryb maintenance — zakres niezmieniony", () => {
     process.env.STAGING_ACCESS_KEY = KEY
     const res = await middleware(req("/api/reservations/kregle", { method: "POST" }))
     expect(res.status).toBe(401)
+  })
+})
+
+// ─── Powierzchnia tras stagingowych poza stagingiem ─────────────────────────
+
+describe("trasy stagingowe nie istnieją przy wyłączonej ochronie", () => {
+  it("POST /api/staging/login → 404", async () => {
+    const res = await stagingLogin(req("/api/staging/login", { method: "POST" }))
+    expect(res.status).toBe(404)
+  })
+
+  it("GET /api/staging/logout → 404 i nie rusza ciasteczka", async () => {
+    const res = await stagingLogout(req("/api/staging/logout"))
+    expect(res.status).toBe(404)
+    expect(res.headers.get("set-cookie")).toBeNull()
+  })
+
+  it("po włączeniu ochrony login odpowiada ponownie", async () => {
+    process.env.STAGING_PROTECTION = "true"
+    process.env.STAGING_ACCESS_KEY = KEY
+    const res = await stagingLogin(req("/api/staging/login", { method: "POST" }))
+    expect(res.status).not.toBe(404)
+  })
+
+  it("włączona ochrona bez klucza → login odpowiada 503, nie przepuszcza", async () => {
+    process.env.STAGING_PROTECTION = "true"
+    const res = await stagingLogin(req("/api/staging/login", { method: "POST" }))
+    expect(res.status).toBe(503)
+  })
+})
+
+// ─── Escapowanie strony logowania ───────────────────────────────────────────
+
+describe("strona logowania escapuje dane z żądania", () => {
+  it("nie wypuszcza surowych znaków łamiących atrybut", () => {
+    const html = stagingLoginPageHtml({ redirectTo: '/x?a="><script>alert(1)</script>' })
+    expect(html).not.toContain("<script>alert(1)</script>")
+    expect(html).toContain("&quot;&gt;&lt;script&gt;")
+    // Atrybut pozostaje domknięty: po wartości następuje cudzysłów i >
+    expect(html).toMatch(/name="redirect" value="[^"]*">/)
+  })
+
+  it("escapuje także komunikat błędu", () => {
+    const html = stagingLoginPageHtml({ error: "<img src=x onerror=alert(1)>" })
+    expect(html).not.toContain("<img src=x")
+    expect(html).toContain("&lt;img src=x")
+  })
+
+  it("zwykła ścieżka przechodzi nietknięta", () => {
+    expect(stagingLoginPageHtml({ redirectTo: "/admin/collections/reservations" })).toContain(
+      'value="/admin/collections/reservations"',
+    )
   })
 })

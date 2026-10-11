@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { STAGING_COOKIE, computeStagingToken, stagingLoginPageHtml } from "@/lib/stagingAccess"
+import {
+  STAGING_COOKIE,
+  computeStagingToken,
+  isStagingProtectionEnabled,
+  stagingLoginPageHtml,
+} from "@/lib/stagingAccess"
 
 export const dynamic = "force-dynamic"
 
@@ -12,6 +17,13 @@ export const dynamic = "force-dynamic"
  * Ciasteczko przechowuje HMAC klucza, nie sam klucz, i jest httpOnly.
  */
 export async function POST(req: NextRequest) {
+  // Przy wyłączonej ochronie ten endpoint nie istnieje. Bez tego produkcja
+  // zyskałaby dwie nowe osiągalne trasy, a chcemy, żeby jej powierzchnia
+  // pozostała dokładnie taka jak przed zmianą.
+  if (!isStagingProtectionEnabled()) {
+    return new NextResponse(null, { status: 404 })
+  }
+
   const key = process.env.STAGING_ACCESS_KEY
   const secret = process.env.PAYLOAD_SECRET
 

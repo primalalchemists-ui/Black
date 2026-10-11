@@ -104,11 +104,27 @@ export function internalFetchHeaders(env: StagingEnv = process.env): Record<stri
   return { [STAGING_HEADER]: key }
 }
 
+/**
+ * Escapowanie do kontekstu HTML.
+ *
+ * Parser URL-a i tak koduje `"`, `<` i `>` w ścieżce oraz query, więc dziś nie
+ * ma tu wektora wstrzyknięcia. Nie chcemy jednak opierać bezpieczeństwa na
+ * cudzej normalizacji — wartość trafia do atrybutu, więc escapujemy wprost.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 export function stagingLoginPageHtml(opts: { redirectTo?: string; error?: string } = {}): string {
   const errorHtml = opts.error
-    ? `<p style="color:#f85149;font-size:.85rem;margin:0 0 14px 0;">${opts.error}</p>`
+    ? `<p style="color:#f85149;font-size:.85rem;margin:0 0 14px 0;">${escapeHtml(opts.error)}</p>`
     : ""
-  const redirect = opts.redirectTo ?? "/"
+  const redirect = escapeHtml(opts.redirectTo ?? "/")
   return `<!DOCTYPE html>
 <html lang="pl">
 <head>
