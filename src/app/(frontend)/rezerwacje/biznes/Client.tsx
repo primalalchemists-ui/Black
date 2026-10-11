@@ -214,9 +214,11 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
       sessionStorage.removeItem("_pendingCancelSession")
       doCancel(pendingSid)
       loadEvents()
-    } else {
-      loadEvents()
     }
+    // Brak gałęzi `else`: przy zwykłym wejściu wydarzenia ładuje już
+    // efekt montażu powyżej. Dodatkowe `loadEvents()` powodowało drugie,
+    // identyczne żądanie /api/cms/events (zmierzone na produkcji: 2× na
+    // każde wejście na stronę).
   }, [])
 
   useEffect(() => {
