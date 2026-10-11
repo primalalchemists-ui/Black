@@ -104,11 +104,21 @@ function describe(t: Target): string {
 
 // ─── Bramki ─────────────────────────────────────────────────────────────────
 
+/** Tabela-znacznik tożsamości. Poza modelem Payloada, nie dotyka jej push ani migracje. */
+const IDENTITY_TABLE = "db_environment_marker"
+
 function assertAllowed(target: Target): void {
   if (process.env.RUN_DB_MIGRATIONS !== "true") {
     fail(
       "RUN_DB_MIGRATIONS != 'true'. Migracje wymagają jawnej zgody na tym środowisku. " +
         "Ustaw RUN_DB_MIGRATIONS=true tylko tam, gdzie świadomie chcesz je uruchamiać.",
+    )
+  }
+
+  if (!process.env.DB_ENVIRONMENT_ID || process.env.DB_ENVIRONMENT_ID.trim() === "") {
+    fail(
+      "Brak DB_ENVIRONMENT_ID. Każde środowisko musi mieć własny, stały identyfikator " +
+        "(np. 'black-staging'), zapisywany w samej bazie przy pierwszym uruchomieniu.",
     )
   }
 
@@ -153,7 +163,7 @@ function assertAllowed(target: Target): void {
  *
  * Przy okazji weryfikuje poświadczenia, zanim ruszy cały init Payloada.
  */
-async function assertDatabaseExists(connectionString: string, target: Target): Promise<void> {
+async function connectPlain(connectionString: string, target: Target) {
   const { Client } = await import("pg")
   const client = new Client({ connectionString })
 
@@ -171,36 +181,92 @@ async function assertDatabaseExists(connectionString: string, target: Target): P
     fail(`Nie udało się połączyć z ${describe(target)}: ${message}`)
   }
 
-  await client.end().catch(() => {})
   console.log("[migrate] Połączenie i istnienie bazy potwierdzone.")
+  return client
 }
 
 /**
- * Dodatkowa bramka na PIERWSZE wdrożenie stagingu.
+ * TRWAŁA TOŻSAMOŚĆ BAZY — najmocniejsze zabezpieczenie w tym skrypcie.
  *
- * Deklaracje hosta i nazwy bazy nie odróżnią dwóch środowisk Railway, jeśli
- * oba mają bazę `railway` pod `postgres.railway.internal`. Ta bramka odróżni
- * je niezawodnie: produkcja NIE jest pusta, więc przy DB_MIGRATION_EXPECT_EMPTY=true
- * pomyłkowe wycelowanie w produkcję zatrzyma się, zanim cokolwiek zmieni.
+ * Deklaracje hosta i nazwy bazy nie odróżnią dwóch środowisk Railway, bo oba
+ * projekty mogą mieć bazę `railway` pod `postgres.railway.internal`. Dlatego
+ * tożsamość jest zapisywana W SAMEJ BAZIE i sprawdzana przy każdym kolejnym
+ * uruchomieniu — wiąże migracje z konkretną instancją, nie z adresem.
+ *
+ * Przebieg:
+ *
+ *   • Znacznik istnieje → musi być równy DB_ENVIRONMENT_ID. Każda inna wartość
+ *     (albo jej brak przy niepustej bazie) zatrzymuje wdrożenie.
+ *   • Znacznika nie ma → to może być TYLKO pierwsze uruchomienie, więc baza
+ *     musi być całkowicie pusta. Produkcja pusta nie jest, więc pomyłkowe
+ *     wycelowanie w nią zatrzyma się tutaj.
+ *
+ * Wymóg pustej bazy jest BEZWARUNKOWY (fail-closed) — nie da się go wyłączyć
+ * flagą ani o nim zapomnieć.
+ *
+ * Znacznik zapisujemy PRZED migracjami, nie po. Gdyby migracja padła w połowie,
+ * baza byłaby już niepusta: bez wcześniejszego znacznika kolejne uruchomienie
+ * utknęłoby na wymogu pustej bazy i zablokowało naprawę.
+ *
+ * Utworzenie tabeli znacznika jest pierwszą i jedyną zmianą schematu
+ * wykonywaną przed właściwymi migracjami — i następuje dopiero po przejściu
+ * kontroli pustości.
  */
-async function assertEmptyIfRequired(pool: {
-  query: (q: string) => Promise<{ rows: Array<Record<string, unknown>> }>
+async function assertDatabaseIdentity(client: {
+  query: (q: string, v?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>
 }): Promise<void> {
-  if (process.env.DB_MIGRATION_EXPECT_EMPTY !== "true") return
+  const expected = process.env.DB_ENVIRONMENT_ID!.trim()
 
-  const res = await pool.query(
+  const markerExists = await client.query(
+    `SELECT to_regclass('public.${IDENTITY_TABLE}') IS NOT NULL AS present`,
+  )
+
+  if (markerExists.rows?.[0]?.present === true) {
+    const res = await client.query(`SELECT environment FROM ${IDENTITY_TABLE} LIMIT 1`)
+    const found = res.rows?.[0]?.environment as string | undefined
+
+    if (!found) {
+      fail(
+        `Tabela ${IDENTITY_TABLE} istnieje, ale jest pusta. Nie potrafię potwierdzić ` +
+          `tożsamości tej bazy — przerwano.`,
+      )
+    }
+    if (found !== expected) {
+      fail(
+        `Ta baza jest oznaczona jako środowisko "${found}", a DB_ENVIRONMENT_ID to ` +
+          `"${expected}". DATABASE_URL wskazuje inne środowisko, niż zakładano.`,
+      )
+    }
+
+    console.log(`[migrate] Tożsamość bazy potwierdzona: "${found}".`)
+    return
+  }
+
+  // Brak znacznika → dopuszczamy wyłącznie całkowicie pustą bazę.
+  const res = await client.query(
     `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
   )
   const tableCount = Number(res.rows?.[0]?.n ?? 0)
 
   if (tableCount !== 0) {
     fail(
-      `DB_MIGRATION_EXPECT_EMPTY=true, ale baza zawiera ${tableCount} tabel w schemacie public. ` +
-        `To nie jest świeża baza. Jeśli to celowe, zdejmij DB_MIGRATION_EXPECT_EMPTY.`,
+      `Baza nie ma znacznika środowiska, ale zawiera ${tableCount} tabel w schemacie public. ` +
+        `Nie mogę potwierdzić, że to właśnie "${expected}" — przerwano, zanim cokolwiek zmieniono. ` +
+        `Jeśli to świadomie ta baza, oznacz ją ręcznie: ` +
+        `CREATE TABLE ${IDENTITY_TABLE} (environment text PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now()); ` +
+        `INSERT INTO ${IDENTITY_TABLE} (environment) VALUES ('${expected}');`,
     )
   }
 
-  console.log("[migrate] Baza jest pusta — zgodnie z DB_MIGRATION_EXPECT_EMPTY=true.")
+  await client.query(
+    `CREATE TABLE ${IDENTITY_TABLE} (
+       environment text PRIMARY KEY,
+       created_at timestamptz NOT NULL DEFAULT now()
+     )`,
+  )
+  await client.query(`INSERT INTO ${IDENTITY_TABLE} (environment) VALUES ($1)`, [expected])
+
+  console.log(`[migrate] Pusta baza — oznaczono jako środowisko "${expected}".`)
 }
 
 // ─── Przebieg ───────────────────────────────────────────────────────────────
@@ -212,16 +278,17 @@ async function main(): Promise<void> {
   console.log(`[migrate] Migracji w pakiecie: ${migrations.length}`)
 
   assertAllowed(target)
-  await assertDatabaseExists(process.env.DATABASE_URL!, target)
 
-  const payload = await getPayload({ config })
-
-  const pool = (payload.db as unknown as { pool?: { query: (q: string) => Promise<any> } }).pool
-  if (!pool?.query) {
-    fail("Brak dostępu do puli połączeń adaptera — nie mogę zweryfikować stanu bazy.")
+  // Wszystkie kontrole celu wykonujemy na czystym kliencie pg, ZANIM
+  // zainicjalizujemy Payload — jego adapter potrafi sam utworzyć brakującą bazę.
+  const client = await connectPlain(process.env.DATABASE_URL!, target)
+  try {
+    await assertDatabaseIdentity(client)
+  } finally {
+    await client.end().catch(() => {})
   }
 
-  await assertEmptyIfRequired(pool!)
+  const payload = await getPayload({ config })
 
   console.log("[migrate] Uruchamiam payload.db.migrate()…")
   await (payload.db as unknown as { migrate: (a: { migrations: typeof migrations }) => Promise<void> }).migrate({

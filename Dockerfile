@@ -26,9 +26,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# DATABASE_URL musi być dostępny jako build arg w Railway (Settings → Variables)
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
+# USUNIĘTO: ARG DATABASE_URL / ENV DATABASE_URL.
+#
+# Były potrzebne wyłącznie dla migracji uruchamianych w trakcie builda — a ten
+# krok został usunięty. `next build` nie łączy się z bazą: zweryfikowane
+# budowaniem obrazu bez przekazania DATABASE_URL (build kończy się sukcesem).
+#
+# Dzięki temu poświadczenia bazy nie trafiają do żadnej warstwy obrazu ani do
+# historii builda. W runtime DATABASE_URL pochodzi ze zmiennych środowiskowych
+# Railway, a nie z obrazu.
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry

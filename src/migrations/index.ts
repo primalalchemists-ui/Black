@@ -14,6 +14,7 @@ import * as migration_20260716_add_verifying_to_payment_status from './20260716_
 import * as migration_20260716_unique_payment_session from './20260716_unique_payment_session';
 import * as migration_20260904_add_expired_payment_status from './20260904_add_expired_payment_status';
 import * as migration_20260904_add_cancellation_reason from './20260904_add_cancellation_reason';
+import * as migration_20261011_catchup_missing_schema from './20261011_catchup_missing_schema';
 
 export const migrations = [
   {
@@ -95,5 +96,10 @@ export const migrations = [
     up: migration_20260904_add_cancellation_reason.up,
     down: migration_20260904_add_cancellation_reason.down,
     name: '20260904_add_cancellation_reason',
+  },
+  {
+    up: migration_20261011_catchup_missing_schema.up,
+    down: migration_20261011_catchup_missing_schema.down,
+    name: '20261011_catchup_missing_schema',
   },
 ];
