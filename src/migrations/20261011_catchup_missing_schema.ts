@@ -84,7 +84,57 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
   `)
 }
 
+/** Jawna zgoda wymagana do wycofania tej migracji. */
+const ROLLBACK_OPT_IN = "ALLOW_CATCHUP_SCHEMA_ROLLBACK"
+
+/**
+ * Rollback DOMYŚLNIE ODMAWIA DZIAŁANIA.
+ *
+ * `up` używa `ADD COLUMN IF NOT EXISTS`, więc na bazie, która te kolumny już
+ * miała (np. produkcja, gdzie powstały poza łańcuchem migracji przez `push`),
+ * ta migracja NIE utworzyła niczego. Po fakcie nie da się odróżnić kolumny
+ * utworzonej tutaj od takiej, która istniała wcześniej — a bezwarunkowy DROP
+ * skasowałby wtedy dane, których ta migracja nigdy nie była właścicielem.
+ *
+ * Dlatego zamiast zgadywać, zatrzymujemy się (fail closed). Odblokowanie
+ * wymaga świadomej decyzji operatora po zweryfikowaniu stanu bazy.
+ *
+ * Nawet po odblokowaniu nie usuwamy kolumny `reservations.invoice_invoice_type`,
+ * jeżeli zawiera jakiekolwiek dane — to rozstrzygający dowód, że nie jest pusta,
+ * świeżo dodana przez tę migrację.
+ */
 export async function down({ db }: MigrateDownArgs): Promise<void> {
+  if (process.env[ROLLBACK_OPT_IN] !== "true") {
+    throw new Error(
+      `Wycofanie 20261011_catchup_missing_schema jest zablokowane.\n` +
+        `\n` +
+        `  Powód: migracja dodawała kolumny przez ADD COLUMN IF NOT EXISTS, więc na bazie,\n` +
+        `         która już je miała, nie utworzyła niczego. Nie da się ustalić, czy należą\n` +
+        `         do tej migracji — bezwarunkowy DROP mógłby skasować istniejące dane.\n` +
+        `\n` +
+        `  Zanim odblokujesz, sprawdź (tylko odczyt), czy kolumny są puste:\n` +
+        `    SELECT count(*) FILTER (WHERE invoice_invoice_type IS NOT NULL) AS uzyte_typy_faktur\n` +
+        `    FROM reservations;\n` +
+        `    SELECT tables_arrival_window_before_minutes, tables_arrival_window_after_minutes\n` +
+        `    FROM reservation_settings;\n` +
+        `\n` +
+        `  Jeśli masz pewność, że to Twoje środowisko i dane są zbędne:\n` +
+        `    ${ROLLBACK_OPT_IN}=true pnpm payload migrate:down\n`,
+    )
+  }
+
+  const used = await db.execute(sql`
+    SELECT count(*)::int AS n FROM "reservations" WHERE "invoice_invoice_type" IS NOT NULL;
+  `)
+  const usedCount = Number((used as unknown as { rows?: Array<{ n?: number }> }).rows?.[0]?.n ?? 0)
+
+  if (usedCount > 0) {
+    throw new Error(
+      `Wycofanie przerwane: kolumna reservations.invoice_invoice_type zawiera ${usedCount} ` +
+        `niepustych wartości. To dane, których ta migracja nie jest właścicielem — nie usuwam ich.`,
+    )
+  }
+
   await db.execute(sql`
     ALTER TABLE "reservation_settings" DROP COLUMN IF EXISTS "tables_arrival_window_after_minutes";
   `)

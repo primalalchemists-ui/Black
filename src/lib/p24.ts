@@ -11,7 +11,24 @@ function getEnv() {
 function isMock() { return getEnv() === "mock" }
 function isSandbox() { return getEnv() === "sandbox" }
 
-function apiBase() { return isSandbox() ? SANDBOX_BASE : PROD_BASE }
+/**
+ * Adres API P24.
+ *
+ * UWAGA na tryb mock: `isSandbox()` jest wtedy false, więc poprzednio ta
+ * funkcja zwracała PROD_BASE i `verifyTransaction` wysyłało żądanie na
+ * PRODUKCYJNE API Przelewy24 — nawet przy P24_ENV=mock. Blokada jest tutaj,
+ * a nie tylko w miejscu wywołania, żeby żadna przyszła funkcja nie mogła
+ * przypadkiem wyjść na zewnątrz w trybie mock.
+ */
+function apiBase(): string {
+  if (isMock()) {
+    throw new Error(
+      "P24_ENV=mock: wywołanie API Przelewy24 jest zablokowane. " +
+        "Tryb mock nie może wysyłać żądań ani na produkcję, ani na sandbox.",
+    )
+  }
+  return isSandbox() ? SANDBOX_BASE : PROD_BASE
+}
 function payBase() { return isSandbox() ? SANDBOX_PAY : PROD_PAY }
 function merchantId() { return Number(process.env.P24_MERCHANT_ID ?? 0) }
 function posId() { return Number(process.env.P24_POS_ID || process.env.P24_MERCHANT_ID || 0) }
@@ -135,6 +152,27 @@ export async function verifyTransaction(params: {
   amount: number
 }): Promise<boolean> {
   console.log(`[P24] verifyTransaction env=${getEnv()} sessionId=${params.sessionId} orderId=${params.orderId} amount=${params.amount}`)
+
+  // Tryb mock: `registerTransaction` nigdy nie wysyła użytkownika do P24, więc
+  // prawdziwa weryfikacja nie ma czego potwierdzać. Kończymy jawnym błędem.
+  //
+  // Świadomie NIE zwracamy `true` — to oznaczyłoby rezerwację jako opłaconą
+  // bez jakiejkolwiek płatności. Nie zwracamy też `false`, bo to jest
+  // nieodróżnialne od prawdziwej odmowy operatora.
+  //
+  // Rzucony błąd obsługuje już `confirmGroupPayment`: loguje P24_VERIFY_ERROR,
+  // przywraca poprzedni paymentStatus i zwraca "verify_failed" — bez awarii
+  // i bez fałszywego potwierdzenia płatności.
+  if (isMock()) {
+    console.warn(
+      `[P24 MOCK] verifyTransaction ZABLOKOWANE sessionId=${params.sessionId} — ` +
+        `brak kontaktu z API P24. Płatność NIE zostaje potwierdzona.`,
+    )
+    throw new Error(
+      "P24_ENV=mock: weryfikacja transakcji jest niedostępna. " +
+        "Tryb mock nie potwierdza płatności — użyj P24_ENV=sandbox, aby testować pełny przepływ.",
+    )
+  }
 
   const sign = signVerify(params.sessionId, params.orderId, params.amount)
   const body = {
