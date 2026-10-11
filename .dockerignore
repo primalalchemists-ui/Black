@@ -1,0 +1,48 @@
+# Kontekst builda ma odpowiadać temu, co widzi Railway (czyli repozytorium),
+# a nie lokalnemu drzewu roboczemu.
+#
+# Bez tego pliku `COPY . .` w etapie builder nadpisywało linuksowe
+# node_modules zainstalowane w etapie deps lokalnymi, zbudowanymi pod
+# Windows (sharp, esbuild, unrs-resolver mają binaria natywne) — lokalny
+# build obrazu nie mógł się udać. Na Railway problem nie występował, bo tam
+# kontekstem jest repo, w którym node_modules jest ignorowane.
+#
+# Przy okazji: sekrety nie trafiają do żadnej warstwy obrazu.
+
+# Zależności i artefakty budowania
+node_modules
+.next
+.pnpm-store
+*.tsbuildinfo
+
+# Sekrety — nigdy nie kopiuj do obrazu
+.env
+.env.*
+!.env.example
+
+# Historia i narzędzia
+.git
+.gitignore
+.github
+
+# Testy i raporty (niepotrzebne w obrazie produkcyjnym)
+tests
+playwright-report
+test-results
+playwright.config.ts
+vitest.config.mts
+vitest.setup.ts
+
+# Lokalne środowisko dewelopera
+.claude
+.cursor
+.vscode
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile
+.dockerignore
+
+# Śmieci
+*.log
+nul
+media

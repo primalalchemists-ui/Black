@@ -42,15 +42,41 @@ RUN \
   else echo "Lockfile not found." && exit 1; \
   fi
 
-# Uruchom migracje bazy danych podczas budowania obrazu
-# || true — build nie failuje jeśli migracje nie mogą się połączyć (np. lokalny build bez DB)
-RUN if [ -n "$DATABASE_URL" ]; then \
-    if [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run migrate:deploy || true; \
-    elif [ -f package-lock.json ]; then npm run migrate:deploy || true; \
-    fi; \
-  else \
-    echo "DATABASE_URL not set — skipping migrations during build"; \
-  fi
+# USUNIĘTO: uruchamianie migracji w trakcie budowania obrazu.
+#
+# Poprzednio było tu `pnpm run migrate:deploy || true`. Dwa problemy:
+#   1. Sieć prywatna Railway nie jest dostępna na etapie builda, więc
+#      połączenie z bazą i tak nie mogło się udać.
+#   2. `|| true` połykało każdy błąd — build wyglądał na udany niezależnie
+#      od tego, czy migracje przeszły.
+# Efekt: migracje w praktyce nie wykonywały się tą drogą wcale.
+#
+# Migracje uruchamia teraz komenda Pre-deploy na Railway (patrz niżej:
+# migrate.mjs). Pre-deploy startuje po zbudowaniu obrazu, ma sieć prywatną
+# i zmienne runtime, a niezerowy kod wyjścia zatrzymuje wdrożenie.
+
+# Spakuj runner migracji do JEDNEGO samowystarczalnego pliku.
+#
+# Jest to konieczne, bo finalny obraz zawiera tylko output standalone:
+# sprawdzone w zbudowanym obrazie — /app/node_modules ma 6 pakietów
+# (@aws-sdk, graphql, next, react, sharp, typescript), bez `payload`,
+# bez `@payloadcms/*`, bez `pg` i bez katalogu .bin. CLI Payloada nie da się
+# tam uruchomić, a `src/migrations/*.ts` nie jest śledzone przez tracing Next,
+# bo payload.config.ts tych plików nie importuje.
+#
+# sharp zostaje zewnętrzny — jest obecny w obrazie runtime.
+# Banner z createRequire: bundel jest ESM, a część zależności używa require().
+RUN corepack enable pnpm && pnpm exec esbuild scripts/run-migrations.ts \
+      --bundle \
+      --platform=node \
+      --format=esm \
+      --target=node22 \
+      --outfile=migrate.mjs \
+      --tsconfig=tsconfig.json \
+      --external:sharp \
+      --external:pg-native \
+      --banner:js="import{createRequire as __createRequire}from'module';const require=__createRequire(import.meta.url);" \
+      --log-level=warning
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -74,6 +100,11 @@ RUN chown nextjs:nodejs .next
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Runner migracji dla komendy Pre-deploy na Railway:
+#   node migrate.mjs
+# Samowystarczalny — nie wymaga CLI Payloada, node_modules ani TypeScriptu.
+COPY --from=builder --chown=nextjs:nodejs /app/migrate.mjs ./migrate.mjs
 
 USER nextjs
 
