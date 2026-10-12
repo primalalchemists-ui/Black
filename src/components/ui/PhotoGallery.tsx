@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import { useImageLoaded } from "@/lib/useImageLoaded"
+import { useRevealOnce } from "@/lib/useRevealOnce"
 
 type Photo = { src: string; alt: string }
 
@@ -64,7 +65,33 @@ function GalleryImage({
   )
 }
 
-function LightboxImage({ src, alt }: { src: string; alt: string }) {
+/**
+ * Styl stopniowanego wejscia miniatury.
+ *
+ * Charakter zapozyczony z miniatur wideo w restauracji: lekkie podniesienie
+ * z dolu plus rozjasnienie, z opoznieniem rosnacym wraz z pozycja — stad
+ * wrazenie odslaniania od lewej do prawej.
+ *
+ * Opoznienie jest ograniczone do pierwszych kilku kafelkow (STAGGER_CAP).
+ * Bez tego ostatnia z 27 miniatur czekalaby prawie dwie sekundy.
+ *
+ * Miejsce kafelka jest zarezerwowane proporcja (`aspect-[4/3]`) na elemencie
+ * nadrzednym, wiec animacja nie rusza ukladu — przesuwamy tylko transform.
+ */
+const STAGGER_STEP = 0.07
+const STAGGER_CAP = 6
+
+function revealStyle(index: number, revealed: boolean): React.CSSProperties {
+  const delay = Math.min(index, STAGGER_CAP) * STAGGER_STEP
+  return {
+    opacity: revealed ? 1 : 0,
+    transform: revealed ? "none" : "translateY(14px)",
+    transition: `opacity 0.45s ease-out ${delay}s, transform 0.45s ease-out ${delay}s`,
+    willChange: revealed ? undefined : "opacity, transform",
+  }
+}
+
+function LightboxImage({ src, alt, closing }: { src: string; alt: string; closing: boolean }) {
   const reduceMotion = useReducedMotion()
   const [loaded, setLoaded] = React.useState(false)
   const imgRef = React.useRef<HTMLImageElement>(null)
@@ -87,9 +114,15 @@ function LightboxImage({ src, alt }: { src: string; alt: string }) {
         className="max-h-[88vh] max-w-[80vw] rounded-lg object-contain"
         onClick={(e) => e.stopPropagation()}
         style={{
-          opacity: loaded ? 1 : 0,
+          /*
+           * Przy zamykaniu obraz gasnie RAZEM z tlem. Pomiar pokazal, ze
+           * wczesniej zostawal na opacity 1 przez cale 220 ms wygaszania
+           * overlayu i urywal sie skokowo — zdjecie „wisialo" nad coraz
+           * bardziej przejrzystym tlem, co widac jako mignięcie.
+           */
+          opacity: closing ? 0 : loaded ? 1 : 0,
           transform: loaded || reduceMotion ? "scale(1)" : "scale(0.97)",
-          transition: reduceMotion ? undefined : "opacity 0.25s ease-out, transform 0.25s ease-out",
+          transition: reduceMotion ? undefined : "opacity 0.2s ease-out, transform 0.25s ease-out",
         }}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
@@ -135,6 +168,26 @@ function Lightbox({
    * ponowne nalozenie `animate` nie ma czego rozjasnic.
    */
   const [closing, setClosing] = React.useState(false)
+
+  /*
+   * Widocznosc tla prowadzimy sami, przejsciem CSS, i NIE przez framera.
+   *
+   * Framer animowal `opacity` przez Web Animations API i po zakonczeniu
+   * wejscia oddawal animacje, a wtedy przez jedna klatke obowiazywala wartosc
+   * bazowa, czyli `initial: 0`. Zmierzone przy otwieraniu:
+   *
+   *     +245ms dialog 0.999  ->  +265ms dialog 0  ->  +289ms dialog 1
+   *
+   * Czarne tlo na moment znikalo i przebijala strona — to bylo mignięcie przy
+   * otwieraniu. Przejscie CSS nie ma czego oddawac.
+   */
+  const [visible, setVisible] = React.useState(false)
+  React.useEffect(() => {
+    // Pierwsza klatka z opacity 0, nastepna z 1 — inaczej przegladarka
+    // nie ma od czego animowac.
+    const id = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   const requestClose = React.useCallback(() => {
     setClosing(true)
@@ -206,18 +259,14 @@ function Lightbox({
   }
 
   return (
-    <motion.div
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: closing ? 0 : 1 }}
-      exit={{
-        opacity: 0,
-        // Jawny czas wygaszania: bez tego exit korzystał ze wspólnego
-        // `transition`, które w trakcie zamykania mogło zostać nadpisane.
-        transition: reduceMotion ? { duration: 0 } : { duration: 0.2, ease: "easeOut" },
+      style={{
+        touchAction: "none",
+        pointerEvents: closing ? "none" : "auto",
+        opacity: visible && !closing ? 1 : 0,
+        transition: reduceMotion ? undefined : "opacity 0.2s ease-out",
       }}
-      transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-      style={{ touchAction: "none", pointerEvents: closing ? "none" : "auto" }}
       onClick={requestClose}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -253,7 +302,7 @@ function Lightbox({
         }
       >
         <AnimatePresence mode="wait">
-          <LightboxImage key={idx} src={photos[idx].src} alt={photos[idx].alt} />
+          <LightboxImage key={idx} src={photos[idx].src} alt={photos[idx].alt} closing={closing} />
         </AnimatePresence>
       </motion.div>
 
@@ -268,7 +317,7 @@ function Lightbox({
       <span className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-sm text-white/80">
         {idx + 1} / {photos.length}
       </span>
-    </motion.div>
+    </div>
   )
 }
 
@@ -282,10 +331,11 @@ export default function PhotoGallery({
   titleId?: string
 }) {
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null)
+  const { ref: sectionRef, revealed } = useRevealOnce<HTMLElement>()
 
   return (
     <>
-      <section aria-labelledby={titleId} className="grid w-full gap-4">
+      <section ref={sectionRef} aria-labelledby={titleId} className="grid w-full gap-4">
         <div className="flex items-center justify-between px-4 md:px-0">
           <h2 id={titleId} className="text-2xl font-semibold">
             {title}
@@ -302,6 +352,7 @@ export default function PhotoGallery({
               type="button"
               key={i}
               className="aspect-[4/3] overflow-hidden rounded-xl bg-muted"
+              style={revealStyle(i, revealed)}
               onClick={() => setLightboxIdx(i)}
               aria-label={`Otwórz: ${photo.alt}`}
             >
@@ -323,6 +374,7 @@ export default function PhotoGallery({
                   <button
                     type="button"
                     className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted"
+                    style={revealStyle(i, revealed)}
                     onClick={() => setLightboxIdx(i)}
                     aria-label={`Otwórz: ${photo.alt}`}
                   >
@@ -339,15 +391,14 @@ export default function PhotoGallery({
         </div>
       </section>
 
-      <AnimatePresence>
-        {lightboxIdx !== null && (
-          <Lightbox
-            photos={photos}
-            startIndex={lightboxIdx}
-            onClose={() => setLightboxIdx(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/*
+        Bez AnimatePresence: Lightbox sam opoznia odmontowanie o czas
+        wygaszania (`requestClose`), wiec nie potrzebuje `exit`. Dzieki temu
+        framer nie nakłada juz `animate` na element, ktory konczy wychodzic.
+      */}
+      {lightboxIdx !== null && (
+        <Lightbox photos={photos} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      )}
     </>
   )
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+
+import { useDelayedFlag } from "@/lib/useDelayedFlag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -323,6 +325,7 @@ export default function ImprezaClient({ initialEventId, phone }: Props) {
   const { ref: partySizeRef, name: partySizeName, onChange: partySizeChange, onBlur: partySizeBlur } = form.register("partySize", { valueAsNumber: true });
 
   const isGatedLoading = !fetchedOnce || loadingEvents;
+  const showLoadingOverlay = useDelayedFlag(isGatedLoading);
   const hasEvents = events.length > 0;
 
   return (
@@ -336,11 +339,19 @@ export default function ImprezaClient({ initialEventId, phone }: Props) {
           </CardHeader>
 
           <CardContent className="relative min-h-[320px]">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: isGatedLoading ? 0 : 1 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              style={{ pointerEvents: isGatedLoading ? "none" : "auto" }}
+            {/*
+                Zanik tresci przejsciem CSS, nie framerem. Framer animuje
+                `opacity` przez Web Animations API i po zakonczeniu oddaje
+                animacje — przez jedna klatke obowiazuje wtedy `initial`, czyli
+                zero. Zmierzone na hero: 0.997 -> 0 -> 1 w dwoch klatkach.
+                Dokladnie to migalo w selektorach w chwili ich pojawienia sie.
+              */}
+            <div
+              style={{
+                opacity: isGatedLoading ? 0 : 1,
+                transition: "opacity 0.35s ease-out",
+                pointerEvents: isGatedLoading ? "none" : "auto",
+              }}
               className="grid gap-4 max-w-[520px] mx-auto"
             >
               {!hasEvents ? (
@@ -423,12 +434,17 @@ export default function ImprezaClient({ initialEventId, phone }: Props) {
                   </Button>
                 </>
               )}
-            </motion.div>
+            </div>
 
+            {/*
+              Wskaznik ladowania dopiero po 250 ms i BEZ wejscia. Dane wracaja
+              w ~200 ms, a nakladka zdazala plynnie wejsc do opacity 0.93
+              i natychmiast gasnac — placeholder pojawial sie i znikal.
+            */}
             <AnimatePresence>
-              {isGatedLoading && (
+              {showLoadingOverlay && (
                 <motion.div
-                  initial={{ opacity: 0 }}
+                  initial={false}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}

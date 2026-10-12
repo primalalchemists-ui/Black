@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+
+import { useDelayedFlag } from "@/lib/useDelayedFlag";
 import { formatPLN } from "@/components/reservations/money";
 
 type Status = "free" | "busy" | "blocked";
@@ -323,6 +325,8 @@ export function ResourceGrid({
   // ekranie — także wtedy, gdy w tle leci odświeżenie tych samych parametrów.
   const hasDataForParams = Boolean(dataKey && loadedKey === dataKey && api);
   const isGatedLoading = shouldFetch && !hasDataForParams;
+  // Nakladka tylko wtedy, gdy ladowanie faktycznie trwa.
+  const showLoadingOverlay = useDelayedFlag(isGatedLoading);
   const ready = shouldFetch ? fetchedOnce && !loading : true;
 
   // ✅ powiadamiaj parent o stanie grid
@@ -453,10 +457,16 @@ export function ResourceGrid({
         </div>
       </div>
 
+      {/*
+        Nakladka ladowania: pojawia sie dopiero po 250 ms i BEZ animacji
+        wejscia (`initial={false}`), a gasnie przez `exit`. Pomiar na stagingu
+        pokazal, ze dane wracaly w ~200 ms, a nakladka zdazala plynnie wejsc do
+        opacity 0.93 i natychmiast gasnac — placeholder pojawial sie i znikal.
+      */}
       <AnimatePresence>
-        {isGatedLoading && (
+        {showLoadingOverlay && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
