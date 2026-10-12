@@ -341,11 +341,19 @@ export function ResourceGrid({
 
   return (
     <div className="relative min-h-[520px]">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: isGatedLoading ? 0 : 1 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        style={{ pointerEvents: isGatedLoading ? "none" : "auto" }}
+      {/*
+        Zanik siatki prowadzony przejsciem CSS. Z framerem, po zakonczeniu
+        animacji `initial 0 -> animate 1`, opacity wracalo na jedna klatke do
+        zera — co na stronach rezerwacji wygladalo jak mignięcie selektora
+        dokladnie w chwili, gdy sie pojawial. Pomiar tego samego zjawiska na
+        hero: 0.997 -> 0 -> 1 w dwoch klatkach.
+      */}
+      <div
+        style={{
+          opacity: isGatedLoading ? 0 : 1,
+          transition: "opacity 0.35s ease-out",
+          pointerEvents: isGatedLoading ? "none" : "auto",
+        }}
       >
         <div className="grid gap-3 mt-2">
           <div className="text-sm text-muted-foreground">
@@ -443,7 +451,7 @@ export function ResourceGrid({
             <input type="hidden" name="segments" value={segments.length ? JSON.stringify(segments) : ""} />
           </div>
         </div>
-      </motion.div>
+      </div>
 
       <AnimatePresence>
         {isGatedLoading && (

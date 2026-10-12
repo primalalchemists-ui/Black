@@ -39,11 +39,15 @@ function GalleryImage({
           />
         )}
       </AnimatePresence>
-      <motion.img
+      <img
         ref={imgRef}
         src={src}
         alt={alt}
         className={className}
+        style={{
+          opacity: loaded ? 1 : 0,
+          transition: reduceMotion || !animateIn ? undefined : "opacity 0.35s ease-out",
+        }}
         /*
          * Galeria leży pod pierwszym ekranem, a ma 27 zdjęć. Przy `eager`
          * wszystkie startowały naraz i dochodziły długo po pierwszym
@@ -53,9 +57,6 @@ function GalleryImage({
          */
         loading="lazy"
         decoding="async"
-        initial={animateIn ? { opacity: 0 } : false}
-        animate={{ opacity: loaded ? 1 : 0 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
         onLoad={onLoaded}
         onError={onLoaded}
       />
@@ -78,16 +79,18 @@ function LightboxImage({ src, alt }: { src: string; alt: string }) {
       {!loaded && (
         <div className="absolute h-16 w-16 animate-spin rounded-full border-4 border-white/20 border-t-white/70" />
       )}
-      <motion.img
+      <img
         ref={imgRef}
         key={src}
         src={src}
         alt={alt}
         className="max-h-[88vh] max-w-[80vw] rounded-lg object-contain"
         onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.97 }}
-        animate={{ opacity: loaded ? 1 : 0, scale: 1 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }}
+        style={{
+          opacity: loaded ? 1 : 0,
+          transform: loaded || reduceMotion ? "scale(1)" : "scale(0.97)",
+          transition: reduceMotion ? undefined : "opacity 0.25s ease-out, transform 0.25s ease-out",
+        }}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
       />

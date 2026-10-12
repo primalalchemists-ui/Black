@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion, type HTMLMotionProps } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 
 import { useImageLoaded } from "@/lib/useImageLoaded";
 
-type FadeInImageProps = HTMLMotionProps<"img"> & {
+type FadeInImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
   duration?: number;
 };
 
@@ -24,14 +24,32 @@ export function FadeInImage({ duration = 0.35, onLoad, className, ...props }: Fa
     if (img?.complete && img.naturalWidth > 0) onLoaded();
   }, [loaded, onLoaded]);
 
+  /*
+ * Zanik prowadzony przejsciem CSS, nie framer-motion.
+ *
+ * Framer animuje `opacity` przez Web Animations API. Po zakonczeniu animacji
+ * usuwa ja z elementu i przez JEDNA KLATKE obowiazuje wartosc bazowa, czyli
+ * `initial` — a ta jest zerowa. Pomiar na stagingu pokazal to dokladnie:
+ *
+ *     +1373ms opacity 0.997  ->  +1391ms opacity 0  ->  +1406ms opacity 1
+ *
+ * Dla uzytkownika to mignięcie dokladnie w chwili, gdy obraz konczy sie
+ * pojawiac. Zachowanie zalezy od momentu zatwierdzenia animacji w Chromium,
+ * dlatego widac je na Chrome, a nie na Safari w iOS.
+ *
+ * Przejscie CSS nie ma tego przekazania: wartosc docelowa jest jednoczesnie
+ * wartoscia stylu, wiec nie ma do czego wracac. Czas i krzywa pozostaja te same.
+ */
   return (
-    <motion.img
+    <img
       ref={imgRef}
       {...props}
       className={className}
-      initial={animateIn ? { opacity: 0 } : false}
-      animate={{ opacity: loaded ? 1 : 0 }}
-      transition={reduceMotion ? { duration: 0 } : { duration, ease: "easeOut" }}
+      style={{
+        ...props.style,
+        opacity: loaded ? 1 : 0,
+        transition: reduceMotion || !animateIn ? undefined : `opacity ${duration}s ease-out`,
+      }}
       onLoad={(e) => {
         onLoaded();
         onLoad?.(e);
