@@ -70,19 +70,19 @@ function formatHHMMFromFloat(h: number) {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-function makeStatusMapFallback(resourcesCount: number, times: string[]) {
-  const map: Record<string, Status> = {};
-  for (let r = 1; r <= resourcesCount; r++) {
-    for (const t of times) {
-      const seed = (r * 97 + t.length * 31) % 10;
-      let s: Status = "free";
-      if (seed === 0 || seed === 1) s = "busy";
-      if (seed === 9) s = "blocked";
-      map[`${r}-${t}`] = s;
-    }
-  }
-  return map;
-}
+// USUNIĘTO: makeStatusMapFallback().
+//
+// Generowała sztuczne statusy wolne/zajęte/niedostępne z ziarna
+// `(r * 97 + t.length * 31) % 10`, zanim dotarła prawdziwa dostępność.
+// Na szczęśliwej ścieżce nie było tego widać (siatka jest wtedy pod
+// overlayem, przy opacity 0), ale gdy zapytanie o dostępność SIĘ NIE
+// POWIODŁO, blok `finally` i tak ustawiał `fetchedOnce = true` — siatka
+// stawała się widoczna i w pełni klikalna, prezentując zmyśloną
+// dostępność jako prawdziwą.
+//
+// Interfejs rezerwacji nigdy nie może pokazywać wymyślonej dostępności.
+// Bez danych z serwera każdy slot jest "blocked" (nieklikalny),
+// a przy błędzie pokazujemy jawny komunikat zamiast milczącej siatki.
 
 export function ResourceGrid({
   resourceLabel,
@@ -110,6 +110,7 @@ export function ResourceGrid({
 
   const [loading, setLoading] = useState(false);
   const [fetchedOnce, setFetchedOnce] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -122,6 +123,7 @@ export function ResourceGrid({
       }
 
       setLoading(true);
+      setLoadFailed(false);
       try {
         const params = new URLSearchParams({ date })
         if (sessionId) params.set("sessionId", sessionId)
@@ -132,6 +134,7 @@ export function ResourceGrid({
 
         if (!res.ok || !json || (json as any).ok !== true) {
           setApi(null);
+          setLoadFailed(true);
           return;
         }
 
@@ -144,6 +147,13 @@ export function ResourceGrid({
           resources: ok.resources ?? [],
           slots: ok.slots ?? [],
         });
+      } catch {
+        // Blad sieci — bez tego leciala nieobsluzona rejekcja, a siatka
+        // i tak stawala sie widoczna przez `finally`.
+        if (alive) {
+          setApi(null);
+          setLoadFailed(true);
+        }
       } finally {
         if (alive) {
           setLoading(false);
@@ -175,8 +185,6 @@ export function ResourceGrid({
   const pricePerHour = api?.pricePerHour ?? priceFallback;
   const slotMinutes = api?.slotMinutes ?? 60;
 
-  const statusMapFallback = useMemo(() => makeStatusMapFallback(resourcesCount, times), [resourcesCount, times]);
-
   function getStatus(resourceNumber: number, time: string): Status {
     if (!enabled) return "blocked";
 
@@ -190,7 +198,8 @@ export function ResourceGrid({
       return slot.statuses?.[r.id] ?? "blocked";
     }
 
-    return statusMapFallback[`${resourceNumber}-${time}`] ?? "blocked";
+    // Brak danych z serwera => nic nie jest oferowane jako wolne.
+    return "blocked";
   }
 
   // =========================
@@ -428,6 +437,26 @@ export function ResourceGrid({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/*
+        Nie udało się pobrać dostępności. Mówimy to wprost, zamiast pokazywać
+        siatkę, która wygląda na w pełni zajętą (albo — jak poprzednio —
+        prezentuje wygenerowane statusy jako prawdziwe).
+      */}
+      {!isGatedLoading && loadFailed ? (
+        <div
+          role="status"
+          className="absolute inset-0 grid place-items-center bg-card/90 p-6 text-center backdrop-blur-sm"
+        >
+          <div className="grid gap-2">
+            <div className="text-sm font-medium">Nie udało się pobrać dostępności.</div>
+            <div className="text-sm text-muted-foreground">
+              Odśwież stronę lub wybierz inny dzień. Nie pokazujemy terminów, których nie
+              możemy potwierdzić.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

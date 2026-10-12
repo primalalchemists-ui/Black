@@ -5,31 +5,35 @@ import { X, ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 
-type Video = { src: string; label?: string }
+type Video = { src: string; poster: string; label?: string }
 
+/**
+ * Miniatura = statyczny obraz, NIE element <video>.
+ *
+ * Wcześniej każda miniatura renderowała pełny `<video src>` z
+ * `preload="metadata"` i wymuszała `currentTime = 0.001`, żeby wyciągnąć
+ * klatkę otwierającą. Seek zmusza przeglądarkę do pobrania realnych bajtów
+ * media, a nie samych metadanych — pomiar produkcji pokazał 8 371 KB w 7
+ * żądaniach wideo na stronie restauracji, w tym DWA pełne filmy (4 323 KB
+ * i 3 973 KB) pobrane wyłącznie po to, by pokazać dwa nieruchome kadry.
+ *
+ * Statyczne WebP (łącznie ~215 KB na pięć miniatur) dają ten sam obraz:
+ * kadr jest wycięty tak samo, jak robił to `object-cover` na pionowym
+ * źródle, więc wygląd galerii się nie zmienia. Pełne wideo ładuje się
+ * dopiero po otwarciu lightboxa.
+ */
 function VideoThumbnail({
-  src,
+  poster,
   label,
   onClick,
   index = 0,
 }: {
-  src: string
+  poster: string
   label?: string
   onClick: () => void
   index?: number
 }) {
-  const videoRef = React.useRef<HTMLVideoElement>(null)
-  const [hasFrame, setHasFrame] = React.useState(false)
   const reduceMotion = useReducedMotion()
-
-  function handleLoadedMetadata() {
-    const v = videoRef.current
-    if (v) v.currentTime = 0.001
-  }
-
-  function handleFrame() {
-    setHasFrame(true)
-  }
 
   return (
     <motion.button
@@ -45,74 +49,32 @@ function VideoThumbnail({
       onClick={onClick}
       aria-label={label ? `Odtwórz: ${label}` : "Odtwórz film"}
     >
-      {/* Shimmer sweep while frame loads */}
-      <AnimatePresence>
-        {!hasFrame && !reduceMotion && (
-          <motion.div
-            key="shimmer"
-            className="absolute inset-0 z-10"
-            exit={{ opacity: 0, transition: { duration: 0.5, ease: "easeOut" } }}
-          >
-            <motion.div
-              className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-              animate={{ x: ["-100%", "350%"] }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: "linear",
-                repeatDelay: 0.7,
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Video frame */}
-      <motion.video
-        ref={videoRef}
-        src={src}
-        preload="metadata"
-        muted
-        playsInline
-        tabIndex={-1}
+      {/*
+        alt="" — obraz jest dekoracyjny wewnątrz przycisku, który ma już
+        aria-label. Inaczej czytnik ekranu przeczytałby opis dwa razy.
+        Jawne width/height utrzymują proporcje zanim plik dotrze (brak CLS).
+        loading="lazy" sprawia, że ukryty wariant układu (display:none)
+        nie pobiera nic — nie ma więc podwójnego ładowania mobile/desktop.
+      */}
+      <img
+        src={poster}
+        alt=""
+        width={640}
+        height={480}
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
-        onLoadedMetadata={handleLoadedMetadata}
-        onSeeked={handleFrame}
-        onCanPlay={handleFrame}
-        animate={{
-          opacity: hasFrame ? 1 : 0,
-          scale: hasFrame ? 1 : 1.06,
-        }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
       />
 
       {/* Dark overlay */}
-      <motion.div
-        className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45"
-        animate={{ opacity: hasFrame ? 1 : 0 }}
-        transition={{ duration: 0.4 }}
-      />
+      <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45" />
 
       {/* Play button */}
-      <motion.div
-        className="absolute inset-0 flex items-center justify-center"
-        animate={{ opacity: hasFrame ? 1 : 0 }}
-        transition={{ duration: 0.35 }}
-      >
-        <motion.div
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110"
-          animate={{
-            scale: hasFrame ? 1 : 0.6,
-            opacity: hasFrame ? 1 : 0,
-          }}
-          transition={{
-            duration: 0.45,
-            ease: [0.34, 1.56, 0.64, 1],
-          }}
-        >
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
           <Play className="h-5 w-5 translate-x-0.5 text-black" fill="currentColor" />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </motion.button>
   )
 }
@@ -231,6 +193,9 @@ function VideoLightbox({
         ref={videoRef}
         key={idx}
         src={videos[idx].src}
+        // Miniatura jako poster — kadr widać natychmiast po otwarciu,
+        // zamiast czarnego prostokąta w oczekiwaniu na pierwszą klatkę.
+        poster={videos[idx].poster}
         controls
         autoPlay
         playsInline
@@ -285,7 +250,7 @@ export default function VideoGallery({
               {videos.map((video, i) => (
                 <CarouselItem key={i} className="pl-2 basis-1/2">
                   <VideoThumbnail
-                    src={video.src}
+                    poster={video.poster}
                     label={video.label}
                     onClick={() => setLightboxIdx(i)}
                     index={i}
@@ -301,7 +266,7 @@ export default function VideoGallery({
           {videos.map((video, i) => (
             <VideoThumbnail
               key={i}
-              src={video.src}
+              poster={video.poster}
               label={video.label}
               onClick={() => setLightboxIdx(i)}
               index={i}
