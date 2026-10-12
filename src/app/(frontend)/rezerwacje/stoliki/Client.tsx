@@ -279,8 +279,16 @@ export default function RezerwacjeStolikiPage() {
 
           <CardContent className="grid gap-5">
             {/* ✅ TO MA BYĆ ZAWSZE WIDOCZNE (bez gatingu) */}
-            <div className="grid gap-2">
-              <Label>Data</Label>
+            {/*
+              Bez widocznej etykiety — przyciski dni idą bezpośrednio pod
+              nagłówkiem „Wybór terminu", tak samo jak w /rezerwacje/kregle
+              i /rezerwacje/bilard.
+
+              Nazwa pola zostaje dla czytników ekranu: `role="group"`
+              z `aria-label`. Same przyciski mają już własne etykiety
+              („Wybierz dzień …"), patrz WeekDateCards.
+            */}
+            <div className="grid gap-2" role="group" aria-label="Data">
               <WeekDateCards value={day} onChange={setDay} />
             </div>
 
