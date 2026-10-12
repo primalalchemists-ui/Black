@@ -280,7 +280,7 @@ export default function RezerwacjeStolikiPage() {
           <CardContent className="grid gap-5">
             {/* ✅ TO MA BYĆ ZAWSZE WIDOCZNE (bez gatingu) */}
             <div className="grid gap-2">
-              <Label>Dzień (tydzień do przodu)</Label>
+              <Label>Data</Label>
               <WeekDateCards value={day} onChange={setDay} />
             </div>
 

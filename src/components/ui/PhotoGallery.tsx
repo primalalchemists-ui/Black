@@ -18,6 +18,45 @@ type Photo = { src: string; alt: string }
  */
 const PRIORITY_COUNT = 6
 
+/**
+ * Miniatury kart.
+ *
+ * Źródła galerii to zdjęcia 3000x4000 px, od 112 do 536 kB (razem 7,4 MB),
+ * a karta pokazuje je w boksie ~233x175 px z `object-cover`. Ściągaliśmy więc
+ * pełną rozdzielczość, żeby ją natychmiast przyciąć i pomniejszyć.
+ *
+ * Miniatury są przycięte do 4:3 WOKÓŁ ŚRODKA — dokładnie tak, jak kadruje
+ * `object-cover` z domyślnym `object-position: 50% 50%` — więc kadr jest
+ * identyczny jak dotąd, tylko bez nadmiarowych pikseli. Trzy szerokości
+ * pozwalają przeglądarce wybrać wariant pod ekran i gęstość pikseli:
+ * 320 px ~14 kB, 480 px ~23 kB, 640 px ~34 kB (średnio, zamiast ~281 kB).
+ *
+ * Lightbox dostaje NIEZMIENIONY oryginał — miniatury są tylko dla kart.
+ */
+const THUMB_WIDTHS = [320, 480, 640] as const
+
+/** `/images/zdjecia/lokal/0.webp` → `lokal-0` */
+function thumbBase(src: string): string | null {
+  const m = src.match(/^\/images\/zdjecia\/(.+)\.webp$/)
+  if (!m) return null
+  return m[1].replace(/\//g, "-")
+}
+
+function thumbSrcSet(src: string): { src: string; srcSet: string } | null {
+  const base = thumbBase(src)
+  if (!base) return null
+  return {
+    src: `/images/zdjecia/thumbs/${base}-640.webp`,
+    srcSet: THUMB_WIDTHS.map((w) => `/images/zdjecia/thumbs/${base}-${w}.webp ${w}w`).join(", "),
+  }
+}
+
+/**
+ * Szerokość karty w układzie: siatka mobilna ma 2 kolumny, karuzela na
+ * desktopie pokazuje 5 kafelków (`basis-1/5`).
+ */
+const THUMB_SIZES = "(min-width: 768px) 20vw, 45vw"
+
 function GalleryImage({
   src,
   alt,
@@ -31,7 +70,9 @@ function GalleryImage({
   priority?: boolean
 }) {
   const reduceMotion = useReducedMotion()
-  const { loaded, animateIn, onLoaded } = useImageLoaded(src)
+  const thumb = React.useMemo(() => thumbSrcSet(src), [src])
+  // Stan wczytania dotyczy adresu, ktory faktycznie laduje przegladarka.
+  const { loaded, animateIn, onLoaded } = useImageLoaded(thumb?.src ?? src)
   const imgRef = React.useRef<HTMLImageElement>(null)
 
   // Obraz z cache nie wywoła `onLoad`, więc sprawdzamy `complete` po montowaniu.
@@ -53,7 +94,9 @@ function GalleryImage({
       </AnimatePresence>
       <img
         ref={imgRef}
-        src={src}
+        src={thumb?.src ?? src}
+        srcSet={thumb?.srcSet}
+        sizes={thumb ? THUMB_SIZES : undefined}
         alt={alt}
         className={className}
         style={{
@@ -210,6 +253,37 @@ function Lightbox({
     document.body.style.overflow = "hidden"
     return () => { document.body.style.overflow = "" }
   }, [])
+
+  /*
+   * Wstępne pobranie SĄSIEDNICH zdjęć — poprzedniego i następnego.
+   *
+   * Lightbox pokazuje oryginały (3000x4000), więc strzałka w bok oznaczała
+   * czekanie na nowy plik. Pobieramy tylko dwa najbliższe i tylko wtedy, gdy
+   * lightbox jest otwarty — przy wejściu na stronę nie leci z tego nic.
+   *
+   * Ten `new Image()` korzysta z tej samej pamięci podręcznej co znacznik
+   * `<img>`, więc przejście do sąsiada jest natychmiastowe, a nie podwójnie
+   * pobrane.
+   */
+  React.useEffect(() => {
+    if (photos.length < 2) return
+
+    const neighbours = [
+      photos[(idx + 1) % photos.length]?.src,
+      photos[(idx - 1 + photos.length) % photos.length]?.src,
+    ].filter((v, i, a) => Boolean(v) && a.indexOf(v) === i)
+
+    const imgs = neighbours.map((src) => {
+      const img = new Image()
+      img.src = src as string
+      return img
+    })
+
+    return () => {
+      // Przerwij pobieranie, jeśli użytkownik zamknął lightbox w trakcie.
+      for (const img of imgs) img.src = ""
+    }
+  }, [idx, photos])
 
   function handleTouchStart(e: React.TouchEvent) {
     if (!dragEnabled) setDragEnabled(true)

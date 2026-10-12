@@ -55,16 +55,6 @@ function MotionWrap({
   );
 }
 
-function EventsSkeleton() {
-  return (
-    <div className="grid gap-3">
-      <div className="h-[160px] w-full rounded-lg bg-muted animate-pulse" />
-      <div className="hidden md:flex justify-center">
-        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
-      </div>
-    </div>
-  );
-}
 
 
 function pluralPL(n: number, one: string, many: string) {
@@ -198,15 +188,19 @@ export default function RozrywkaPage() {
         <p className="mt-1 text-sm text-muted-foreground">Bilard, kręgle i wydarzenia specjalne.</p>
       </div>
 
-      {/* Events */}
+      {/*
+        Events — sekcja opcjonalna.
+
+        Dopóki nie wiemy, czy są wydarzenia, NIE zajmujemy miejsca. Wcześniej
+        renderował się tu szkielet, a po odpowiedzi z pustą listą sekcja
+        znikała — czyli element pojawiał się i gasł, przesuwając treść poniżej.
+        Zasada: opcjonalna sekcja wydarzeń bez treści nie może mrugnąć.
+
+        Sekcje niezależne (kręgle, bilard) mają własny stan ładowania i
+        zostają bez zmian.
+      */}
       <AnimatePresence mode="wait" initial={false}>
-        {loadingEvents ? (
-          <MotionWrap k="events-loading">
-            <div role="status" aria-live="polite">
-              <EventsSkeleton />
-            </div>
-          </MotionWrap>
-        ) : !events.length ? null : events.length === 1 ? (
+        {loadingEvents || !events.length ? null : events.length === 1 ? (
           <MotionWrap k="events-single">
             <EventSlide e={events[0]!} href="/rezerwacje/stoliki" ctaLabel="Rezerwuj stolik" />
           </MotionWrap>
