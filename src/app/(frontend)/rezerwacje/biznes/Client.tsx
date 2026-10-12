@@ -327,20 +327,6 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
 
   const isGatedLoading = !fetchedOnce || loadingEvents;
 
-  /*
-   * Pierwsze odsłonięcie jest NATYCHMIASTOWE, bez przejścia.
-   *
-   * Pomiar pierwszej wizyty na stagingu (czysta sesja): obszar wyboru był
-   * pusty ~680 ms, a potem siatka wchodziła zanikiem 310 ms — to właśnie to
-   * użytkownik widział jako mignięcie przy pierwszym wejściu.
-   *
-   * Teraz neutralna nakładka jest w HTML z serwera, więc obszar nigdy nie
-   * jest pusty, a gdy dane dojdą, treść pojawia się od razu. Przejście
-   * zostaje dla PÓŹNIEJSZYCH zmian, np. zmiany daty.
-   */
-  const hadRevealRef = useRef(false);
-  const revealWithTransition = hadRevealRef.current;
-  if (!isGatedLoading) hadRevealRef.current = true;
 
   return (
     <div className="grid gap-6">
@@ -369,7 +355,19 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
             <div
               style={{
                 opacity: isGatedLoading ? 0 : 1,
-                transition: revealWithTransition ? "opacity 0.35s ease-out" : undefined,
+                /*
+                 * Treść pojawia się SKOKOWO, bez przejścia opacity.
+                 *
+                 * Wariant z przejściem tylko po pierwszym odsłonięciu okazał się
+                 * niedeterministyczny: po odsłonięciu komponent jest przerenderowywany
+                 * (powiadomienie rodzica o stanie ładowania), a przejście potrafiło
+                 * zostać nałożone w tej samej klatce, w której opacity szło z 0 na 1 —
+                 * raz wychodziło skokowo, raz jako zanik 300 ms. Mierzone na stagingu.
+                 *
+                 * Obszar i tak nie jest pusty: do czasu danych zakrywa go neutralna
+                 * nakładka obecna już w HTML z serwera. Zamiana jest więc jednym
+                 * podstawieniem, bez animacji.
+                 */
                 pointerEvents: isGatedLoading ? "none" : "auto",
               }}
               className="grid gap-4 max-w-[520px] mx-auto"

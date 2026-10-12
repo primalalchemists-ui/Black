@@ -102,9 +102,14 @@ function OfferCard({ item }: { item: OfferItem }) {
         loop
         muted
         playsInline
-        /* `metadata` pobiera tylko nagłówki — pełny plik idzie dopiero przy
-           odtwarzaniu. Poster pokrywa kadr natychmiast. */
-        preload="metadata"
+        /*
+         * `none`, nie `metadata`: poster pokrywa kadr natychmiast, więc film
+         * nie musi nic pobierać przy wejściu na stronę. Zmierzone na stagingu
+         * przy `metadata`: Chromium i tak dociągał zakresy do readyState 4
+         * dla wszystkich czterech plików. Odtwarzanie startuje przy hoverze
+         * (desktop) albo w widoku (dotyk) i wtedy plik się dociąga.
+         */
+        preload="none"
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
 
