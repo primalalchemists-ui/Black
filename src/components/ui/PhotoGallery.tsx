@@ -120,6 +120,24 @@ function Lightbox({
    */
   const [dragEnabled, setDragEnabled] = React.useState(false)
 
+  /*
+   * Zamykanie prowadzimy wlasnym stanem, nie tylko `exit`.
+   *
+   * Pomiar pokazal, ze po zakonczeniu `exit` framer przywracal elementowi
+   * `animate`, czyli opacity 1, na jedna klatke przed usunieciem go z DOM
+   * (+219 ms: 0.04 → 1 → zniknięcie). To bylo to dodatkowe mignięcie.
+   * Zablokowanie sprezyny `dragX` nie wystarczylo.
+   *
+   * Gdy `closing` jest ustawione, `animate` celuje w to samo co `exit`, wiec
+   * ponowne nalozenie `animate` nie ma czego rozjasnic.
+   */
+  const [closing, setClosing] = React.useState(false)
+
+  const requestClose = React.useCallback(() => {
+    setClosing(true)
+    window.setTimeout(onClose, reduceMotion ? 0 : 200)
+  }, [onClose, reduceMotion])
+
   const touchRef = React.useRef<{ x: number; y: number; t: number } | null>(null)
   const lockAxis = React.useRef<"h" | "v" | null>(null)
 
@@ -135,13 +153,13 @@ function Lightbox({
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+      if (e.key === "Escape") requestClose()
       if (e.key === "ArrowLeft") prev()
       if (e.key === "ArrowRight") next()
     }
     document.addEventListener("keydown", handler)
     return () => document.removeEventListener("keydown", handler)
-  }, [onClose, prev, next])
+  }, [requestClose, prev, next])
 
   React.useEffect(() => {
     document.body.style.overflow = "hidden"
@@ -187,9 +205,8 @@ function Lightbox({
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black"
-      style={{ touchAction: "none" }}
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ opacity: closing ? 0 : 1 }}
       exit={{
         opacity: 0,
         // Jawny czas wygaszania: bez tego exit korzystał ze wspólnego
@@ -197,7 +214,8 @@ function Lightbox({
         transition: reduceMotion ? { duration: 0 } : { duration: 0.2, ease: "easeOut" },
       }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-      onClick={onClose}
+      style={{ touchAction: "none", pointerEvents: closing ? "none" : "auto" }}
+      onClick={requestClose}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -207,7 +225,7 @@ function Lightbox({
     >
       <button
         className="absolute right-4 top-4 z-10 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/30"
-        onClick={onClose}
+        onClick={requestClose}
         aria-label="Zamknij"
       >
         <X className="h-5 w-5" />
