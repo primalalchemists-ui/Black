@@ -3,6 +3,7 @@ import type { CollectionConfig } from "payload";
 import { APIError } from "payload";
 import type { Service } from "@/lib/resourceFilters";
 import { expectedResourceTypeByService, extractRelationshipIds } from "@/lib/resourceFilters";
+import { utcBlackoutRange } from "@/lib/reservationIntervals";
 
 const isStaffOrAdmin = ({ req }: any) => ["admin", "staff"].includes(req.user?.role);
 
@@ -100,8 +101,26 @@ export const Blackouts: CollectionConfig = {
           const startTotal = startH * 60 + startM;
           const endTotal = endH * 60 + endM;
 
-          if (endTotal <= startTotal) {
-            throw new APIError('Czas “Do” musi być późniejszy niż “Od”.', 400, undefined, true);
+          if (endTotal === startTotal) {
+            throw new APIError('Czas “Do” musi być inny niż “Od” (blokada zerowej długości).', 400, undefined, true);
+          }
+
+          // endTotal === 0 → koniec o 00:00, czyli koniec wybranego dnia.
+          // Dozwolone: cały przedział [start, 24:00) leży w obrębie dnia D,
+          // więc wyszukiwanie blackoutów po polu `day` działa poprawnie.
+          //
+          // endTotal < startTotal, ale != 0 → blokada przechodziłaby na
+          // NASTĘPNY dzień kalendarzowy. Nieobsługiwane: blackouty są
+          // pobierane po `day`, więc część po północy nie zablokowałaby
+          // niczego w dniu D+1. Zamiast tworzyć blokadę działającą
+          // połowicznie, odrzucamy ją jawnie.
+          if (endTotal < startTotal && endTotal !== 0) {
+            throw new APIError(
+              'Blokada nie może przechodzić na następny dzień. Koniec o 00:00 oznacza koniec wybranego dnia; dla dalszych godzin utwórz drugą blokadę na kolejny dzień.',
+              400,
+              undefined,
+              true,
+            );
           }
         } else {
           // porządek danych przy całodniowej (bezpieczne wartości z listy)
@@ -122,8 +141,18 @@ export const Blackouts: CollectionConfig = {
           return new Date(Date.UTC(y, mo, d, hour, minute, 0, 0));
         }
 
-        const bStart = allDay ? toUTC(0, 0) : toUTC(Number((data as any).startHour), Number((data as any).startMinute));
-        const bEnd   = allDay ? toUTC(23, 59) : toUTC(Number((data as any).endHour), Number((data as any).endMinute));
+        // Koniec o północy należy do następnego dnia kalendarzowego.
+        // Bez tego `bEnd` wypadał przed `bStart`, a zapytanie o kolizję
+        // z rezerwacjami (startsAt < bEnd) nie zwracało nic.
+        // Patrz src/lib/reservationIntervals.ts
+        const selfRange = utcBlackoutRange(day, data as any);
+        // Nieosiągalne: dla !allDay walidacja powyżej odrzuciła już NaN
+        // i zerową długość, a dla allDay zakres jest zawsze zwracany.
+        // Zostawione jako zabezpieczenie typu — nigdy nie pomijamy tu
+        // sprawdzania kolizji dla poprawnych danych.
+        if (!selfRange) return data;
+        const bStart = selfRange.s;
+        const bEnd = selfRange.e;
 
         function resOverlap(a: Date, b: Date, c: Date, dd: Date) {
           return a.getTime() < dd.getTime() && c.getTime() < b.getTime();
@@ -197,11 +226,10 @@ export const Blackouts: CollectionConfig = {
           const bOtherIds = extractIds((b as any).resources);
           if (!ids.some((id) => bOtherIds.includes(id))) continue;
 
-          const bOtherAllDay = Boolean((b as any).allDay);
-          const bOtherStart = bOtherAllDay ? toUTC(0, 0) : toUTC(Number((b as any).startHour), Number((b as any).startMinute));
-          const bOtherEnd   = bOtherAllDay ? toUTC(23, 59) : toUTC(Number((b as any).endHour), Number((b as any).endMinute));
+          const otherRange = utcBlackoutRange((b as any).day ?? day, b as any);
+          if (!otherRange) continue;
 
-          if (resOverlap(bStart, bEnd, bOtherStart, bOtherEnd)) {
+          if (resOverlap(bStart, bEnd, otherRange.s, otherRange.e)) {
             throw new APIError("Wystąpiła kolizja z istniejącą blokadą dostępności w tym terminie.", 400, undefined, true);
           }
         }

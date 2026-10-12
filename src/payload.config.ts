@@ -7,6 +7,8 @@ import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
+import { shouldPushSchema } from './lib/dbSafety'
+
 import { Users } from './collections/Users'
 import { Media } from './collections/Media'
 import { Events } from './collections/Events'
@@ -120,7 +122,14 @@ export default buildConfig({
     pool: {
       connectionString: DATABASE_URL,
     },
-    push: false,
+    // Produkcja i development: ZAWSZE false — schemat zmieniają wyłącznie
+    // migracje z src/migrations.
+    //
+    // Push wymaga JEDNOCZEŚNIE: NODE_ENV === 'test', PAYLOAD_DB_PUSH === 'true'
+    // oraz LOKALNEJ bazy. Trzeci warunek sprawia, że samo ustawienie
+    // PAYLOAD_DB_PUSH=true na zdalnym środowisku niczego nie włączy.
+    // Szczegóły i uzasadnienie: src/lib/dbSafety.ts
+    push: shouldPushSchema(),
   }),
 
   plugins: [
