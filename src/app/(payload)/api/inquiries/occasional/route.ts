@@ -129,6 +129,11 @@ export async function POST(req: Request) {
     });
 
     // mail do klienta
+    //
+    // `to` jest tu surowym adresem z formularza i tak ma zostać. Przekierowanie
+    // na adres testowy nakłada TRANSPORT (`src/lib/mailPolicy.ts`), nie ten
+    // punkt wysyłki — właśnie ta ścieżka pokazała, że konwencja
+    // „pamiętaj o effectiveTo()" zawodzi.
     await resend.emails.send({
       from,
       to: v.email,

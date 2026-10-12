@@ -22,6 +22,11 @@ export default function HomePageClient({ settings }: { settings: SiteSettings })
 
     if (reduced) return
 
+    // Przy jednym slajdzie `scrollNext()` nie ma co przewijać, ale i tak
+    // wywołuje przeliczenie karuzeli i ponowny render drzewa hero — a to
+    // właśnie resetowało animację obrazu. HERO_SLIDES ma dziś jeden wpis.
+    if ((heroApi.scrollSnapList?.().length ?? 0) < 2) return
+
     const id = window.setInterval(() => {
       heroApi.scrollNext()
     }, 5000)

@@ -1,3 +1,5 @@
+import { internalFetchHeaders } from "@/lib/stagingAccess"
+
 export type OpeningHour = {
   key: string
   label: string
@@ -31,6 +33,9 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   }
 
   const res = await fetch(`${baseUrl}/api/globals/site-settings`, {
+    // Fetch serwer -> wlasne /api/*: nie niesie ciasteczka przegladarki,
+    // a bramka stagingowa obejmuje takze /api/*. Poza stagingiem pusty obiekt.
+    headers: internalFetchHeaders(),
     next: { revalidate: 60 },
   })
 

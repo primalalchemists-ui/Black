@@ -97,6 +97,13 @@
 // src/lib/mail.ts (lub lib/mail.ts)
 import { Resend } from "resend";
 
+import {
+  applyRecipientPolicy,
+  describeRedirect,
+  requireTestRecipient,
+  resolveMailMode,
+} from "@/lib/mailPolicy";
+
 function getEnv(name: string) {
   const v = process.env[name];
   return v && v.length ? v : null;
@@ -138,8 +145,53 @@ function makeMockClient(): Resend {
 
 let cachedResend: Resend | null = null;
 
+/**
+ * Nakłada politykę adresatów na KAŻDĄ wysyłkę.
+ *
+ * Opakowanie jest tu, a nie u wywołujących, bo konwencja `effectiveTo()`
+ * raz już zawiodła — `/api/inquiries/occasional` wysyłał na adres
+ * z formularza. Patrz `src/lib/mailPolicy.ts`.
+ *
+ * W trybie `live` polityka jest przelotką, więc produkcja działa jak dotąd.
+ *
+ * Eksportowane, żeby testy mogły sprawdzić samo opakowanie na atrapie klienta,
+ * bez kontaktu z Resendem.
+ */
+export function withRecipientPolicy(client: Resend): Resend {
+  const originalSend = client.emails.send.bind(client.emails);
+
+  const guarded = async (params: MailSendParams, options?: unknown) => {
+    const note = describeRedirect(params as Record<string, unknown>);
+    if (note) console.log(`[mail] ${note}`);
+
+    // Rzuca, gdy adresat jest niedozwolony — wywołujący mają wysyłkę
+    // w best-effort try/catch, więc rezerwacja i tak się zapisze.
+    const safe = applyRecipientPolicy(params as Record<string, unknown>);
+
+    return originalSend(safe as never, options as never);
+  };
+
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop !== "emails") return Reflect.get(target, prop, receiver);
+      const emails = Reflect.get(target, prop, receiver) as Resend["emails"];
+      return new Proxy(emails, {
+        get(emailsTarget, emailsProp, emailsReceiver) {
+          if (emailsProp === "send") return guarded;
+          return Reflect.get(emailsTarget, emailsProp, emailsReceiver);
+        },
+      });
+    },
+  });
+}
+
 export function getMailClient(): Resend {
-  if (process.env.EMAIL_MODE === "mock") return makeMockClient();
+  const mode = resolveMailMode();
+
+  // Tryb testowy musi mieć adres docelowy, zanim cokolwiek powstanie.
+  if (mode === "test") requireTestRecipient();
+
+  if (mode === "mock") return withRecipientPolicy(makeMockClient());
 
   if (cachedResend) return cachedResend;
 
@@ -149,7 +201,7 @@ export function getMailClient(): Resend {
     throw new Error("MAIL_NOT_CONFIGURED");
   }
 
-  cachedResend = new Resend(key);
+  cachedResend = withRecipientPolicy(new Resend(key));
   return cachedResend;
 }
 
@@ -168,8 +220,24 @@ export function getOwnerTo() {
   return requireAtRuntime("MAIL_TO_OWNER");
 }
 
+/**
+ * Adres, na który wiadomość rzeczywiście pojedzie.
+ *
+ * Zostaje dla zgodności z istniejącymi wywołaniami i logami, ale nie jest już
+ * jedynym zabezpieczeniem — transport nakłada politykę niezależnie.
+ *
+ * Poprzednia wersja miała odwrót `?? actual`: przy EMAIL_MODE=test bez
+ * RESERVATION_TEST_EMAIL wiadomość szła do KLIENTA. Teraz taki stan rzuca.
+ */
 export function effectiveTo(actual: string): string {
-  return process.env.EMAIL_MODE === "test"
-    ? (process.env.RESERVATION_TEST_EMAIL ?? actual)
-    : actual;
+  if (resolveMailMode() !== "test") return actual;
+  return requireTestRecipient();
+}
+
+/**
+ * Adres właściciela. W trybie testowym również podlega przekierowaniu, żeby
+ * logi zgadzały się z tym, co faktycznie robi transport.
+ */
+export function effectiveOwnerTo(): string {
+  return effectiveTo(getOwnerTo());
 }

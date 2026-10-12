@@ -3,7 +3,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -251,6 +250,7 @@ export default function RezerwacjeStolikiPage() {
 
   // gating: ukrywamy tylko “resztę” (godzina+osoby+podsumowanie+przycisk)
   const isGatedLoading = !fetchedOnce || loadingSlots;
+
   const gatedCanGoStep2 = !isGatedLoading && canGoStep2;
 
   return (
@@ -279,18 +279,46 @@ export default function RezerwacjeStolikiPage() {
 
           <CardContent className="grid gap-5">
             {/* ✅ TO MA BYĆ ZAWSZE WIDOCZNE (bez gatingu) */}
-            <div className="grid gap-2">
-              <Label>Dzień (tydzień do przodu)</Label>
+            {/*
+              Bez widocznej etykiety — przyciski dni idą bezpośrednio pod
+              nagłówkiem „Wybór terminu", tak samo jak w /rezerwacje/kregle
+              i /rezerwacje/bilard.
+
+              Nazwa pola zostaje dla czytników ekranu: `role="group"`
+              z `aria-label`. Same przyciski mają już własne etykiety
+              („Wybierz dzień …"), patrz WeekDateCards.
+            */}
+            <div className="grid gap-2" role="group" aria-label="Data">
               <WeekDateCards value={day} onChange={setDay} />
             </div>
 
             {/* ✅ tutaj dopiero gating + overlay, bez layout shiftu */}
             <div className="relative min-h-[200px]">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isGatedLoading ? 0 : 1 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-                style={{ pointerEvents: isGatedLoading ? "none" : "auto" }}
+              {/*
+                Zanik tresci przejsciem CSS, nie framerem. Framer animuje
+                `opacity` przez Web Animations API i po zakonczeniu oddaje
+                animacje — przez jedna klatke obowiazuje wtedy `initial`, czyli
+                zero. Zmierzone na hero: 0.997 -> 0 -> 1 w dwoch klatkach.
+                Dokladnie to migalo w selektorach w chwili ich pojawienia sie.
+              */}
+              <div
+                style={{
+                  opacity: isGatedLoading ? 0 : 1,
+                  /*
+                   * Treść pojawia się SKOKOWO, bez przejścia opacity.
+                   *
+                   * Wariant z przejściem tylko po pierwszym odsłonięciu okazał się
+                   * niedeterministyczny: po odsłonięciu komponent jest przerenderowywany
+                   * (powiadomienie rodzica o stanie ładowania), a przejście potrafiło
+                   * zostać nałożone w tej samej klatce, w której opacity szło z 0 na 1 —
+                   * raz wychodziło skokowo, raz jako zanik 300 ms. Mierzone na stagingu.
+                   *
+                   * Obszar i tak nie jest pusty: do czasu danych zakrywa go neutralna
+                   * nakładka obecna już w HTML z serwera. Zamiana jest więc jednym
+                   * podstawieniem, bez animacji.
+                   */
+                  pointerEvents: isGatedLoading ? "none" : "auto",
+                }}
                 className="grid gap-5"
               >
                 <div className="grid gap-2 max-w-[360px]">
@@ -351,24 +379,29 @@ export default function RezerwacjeStolikiPage() {
                     <span className="text-sm text-muted-foreground">{disabledMessage}</span>
                   ) : null}
                 </div>
-              </motion.div>
+              </div>
 
-              <AnimatePresence>
+              {/*
+                Wskaznik ladowania dopiero po 250 ms i BEZ wejscia. Dane wracaja
+                w ~200 ms, a nakladka zdazala plynnie wejsc do opacity 0.93
+                i natychmiast gasnac — placeholder pojawial sie i znikal.
+              */}
+              {/*
+                Nakładka jest w HTML z serwera (warunek nie zależy od stanu
+                klienta), więc obszar wyboru nigdy nie jest pusty. Zamiana na
+                gotową treść jest natychmiastowa — bez `exit`, bo przenikanie
+                nad już widoczną treścią czytało się jako kolejne mignięcie.
+              */}
                 {isGatedLoading && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
+                  <div
                     className="absolute inset-0 grid place-items-center bg-card/80 backdrop-blur-sm"
                   >
                     <div className="grid place-items-center gap-3">
                       <div className="h-16 w-16 animate-spin rounded-full border-4 border-black/20 border-t-black" />
                       <div className="text-sm text-muted-foreground">Ładowanie dostępności…</div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
           </CardContent>
         </Card>

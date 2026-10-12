@@ -58,7 +58,21 @@ export default function EventSection() {
 
   const routedEvents = React.useMemo(() => events.filter((e) => !!e.kind && e.showOnHomepage === true), [events])
 
-  if (!loading && routedEvents.length === 0) return null
+  /*
+   * Dopoki nie wiemy, czy sa wydarzenia, nie zajmujemy miejsca.
+   *
+   * Wczesniej przy `loading` renderowal sie szkielet wysokosci ~209 px, a po
+   * odpowiedzi z zerem wydarzen komponent zwracal `null` i sekcja ZNIKALA.
+   * Wszystko ponizej — w tym galeria — przeskakiwalo w gore. Pomiar na
+   * stagingu przypisal temu calosc CLS strony (0.0535), a dla uzytkownika
+   * wygladalo to jak „galeria nagle sie rozwija".
+   *
+   * Kompromis jest swiadomy: tracimy animacje ladowania tej sekcji. Gdy
+   * wydarzenia sa, sekcja nadal pojawia sie po pobraniu — zeby usunac i to,
+   * dane musialyby przyjsc z serwera przy pierwszym renderze.
+   */
+  if (loading) return null
+  if (routedEvents.length === 0) return null
 
   const isMultiple = !loading && routedEvents.length > 1
 

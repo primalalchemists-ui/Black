@@ -6,7 +6,8 @@ import type { CarouselApi } from "@/components/ui/carousel"
 import { Button } from "@/components/ui/button"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import DotNav from "@/components/home/components/DotNav"
-import { motion, useReducedMotion } from "framer-motion"
+import { useReducedMotion } from "framer-motion"
+import { useImageLoaded } from "@/lib/useImageLoaded"
 
 const HERO_SLIDES = [
   {
@@ -36,31 +37,52 @@ function FadeInBg({
   className: string
 }) {
   const reduceMotion = useReducedMotion()
-  const [loaded, setLoaded] = React.useState(false)
+  const { loaded, animateIn, onLoaded } = useImageLoaded(src)
 
   React.useEffect(() => {
+    if (loaded) return
     let alive = true
-    setLoaded(false)
 
     const img = new Image()
     img.src = src
-    img.onload = () => alive && setLoaded(true)
-    img.onerror = () => alive && setLoaded(true) // nie blokuj UI jak fail
+    img.onload = () => alive && onLoaded()
+    img.onerror = () => alive && onLoaded() // nie blokuj UI jak fail
 
     return () => {
       alive = false
     }
-  }, [src])
+    // `loaded` celowo poza zależnościami: po wczytaniu nie chcemy wracać
+    // do stanu niewczytanego ani uruchamiać preloadu ponownie.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, onLoaded])
 
+  /*
+ * Zanik prowadzony przejsciem CSS, nie framer-motion.
+ *
+ * Framer animuje `opacity` przez Web Animations API. Po zakonczeniu animacji
+ * usuwa ja z elementu i przez JEDNA KLATKE obowiazuje wartosc bazowa, czyli
+ * `initial` — a ta jest zerowa. Pomiar na stagingu pokazal to dokladnie:
+ *
+ *     +1373ms opacity 0.997  ->  +1391ms opacity 0  ->  +1406ms opacity 1
+ *
+ * Dla uzytkownika to mignięcie dokladnie w chwili, gdy obraz konczy sie
+ * pojawiac. Zachowanie zalezy od momentu zatwierdzenia animacji w Chromium,
+ * dlatego widac je na Chrome, a nie na Safari w iOS.
+ *
+ * Przejscie CSS nie ma tego przekazania: wartosc docelowa jest jednoczesnie
+ * wartoscia stylu, wiec nie ma do czego wracac. Czas i krzywa pozostaja te same.
+ */
   return (
-    <motion.div
+    <div
       className={className}
-      style={{ backgroundImage: `url(${src})` }}
+      style={{
+        backgroundImage: `url(${src})`,
+        opacity: loaded ? 1 : 0,
+        // Brak przejscia, gdy obraz byl juz wczytany — wtedy nie animujemy.
+        transition: reduceMotion || !animateIn ? undefined : "opacity 0.35s ease-out",
+      }}
       role="img"
       aria-label={alt}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: loaded ? 1 : 0 }}
-      transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
     />
   )
 }

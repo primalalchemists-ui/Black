@@ -89,52 +89,17 @@ export default function RezerwacjeKreglePage({ initialDate }: { initialDate?: st
     return `${y}-${m}-${dd}`;
   });
 
-  const [cfg, setCfg] = useState<{ pricePerHour: number; resourcesCount: number; startHour: number; endHour: number } | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   useEffect(() => { activeSessionIdRef.current = activeSessionId }, [activeSessionId]);
 
 
-  useEffect(() => {
-    let alive = true;
-
-    async function load() {
-      try {
-        const res = await fetch(`/api/reservations/kregle?date=${encodeURIComponent(day)}`);
-        const json = (await res.json().catch(() => null)) as AvailabilityResponse | null;
-
-        if (!alive) return;
-
-        if (!res.ok || !json || (json as any).ok !== true) {
-          setCfg({ pricePerHour: 120, resourcesCount: 4, startHour: 16, endHour: 22 });
-          return;
-        }
-
-        const ok = json as Extract<AvailabilityResponse, { ok: true }>;
-        const resourcesCount = Array.isArray(ok.resources) && ok.resources.length ? ok.resources.length : 4;
-
-        const startHour = ok.slots?.[0]?.time ? Number(ok.slots[0].time.split(":")[0]) : 16;
-        const endHour =
-          ok.slots?.length && ok.slots[ok.slots.length - 1]?.time
-            ? Number(ok.slots[ok.slots.length - 1].time.split(":")[0])
-            : 22;
-
-        setCfg({
-          pricePerHour: Number(ok.pricePerHour ?? 120),
-          resourcesCount,
-          startHour,
-          endHour,
-        });
-      } catch {
-        if (alive) setCfg({ pricePerHour: 120, resourcesCount: 4, startHour: 16, endHour: 22 });
-      }
-    }
-
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [day]);
+  // Konfiguracja (cena, liczba zasobow, godziny) NIE jest tu pobierana.
+  // ResourceGrid i tak odpytuje ten sam endpoint i ma te dane u siebie —
+  // wczesniejszy fetch byl dokladnym duplikatem /api/reservations/kregle
+  // (zmierzone na produkcji: 2 zadania na to samo URL przy kazdym wejsciu
+  // i kazdej zmianie daty). Wartosci ponizej sluza wylacznie jako wymiary
+  // szkieletu, zanim dotra dane — siatka jest wtedy niewidoczna.
 
   const [grid, setGrid] = useState<{
     startHour: number | null;
@@ -374,10 +339,10 @@ export default function RezerwacjeKreglePage({ initialDate }: { initialDate?: st
               date={day}
               sessionId={activeSessionId ?? undefined}
               resourceLabel="Tor"
-              resourcesCount={cfg?.resourcesCount ?? 4}
-              pricePerHour={cfg?.pricePerHour ?? 120}
-              startHour={cfg?.startHour ?? 16}
-              endHour={cfg?.endHour ?? 22}
+              resourcesCount={4}
+              pricePerHour={120}
+              startHour={16}
+              endHour={22}
               onChange={(v) => { setGrid(v as any); setConflictMessage(null); }}
               onLoadingChange={({ ready }) => setGridReady(ready)}
               onEnabledChange={({ enabled, disabledMessage }) => {

@@ -8,6 +8,9 @@ import VideoGallery from "@/components/ui/VideoGallery";
 
 const VIDEOS = [1, 2, 3, 4, 5].map((n) => ({
   src: `/images/zdjecia/jedzenie/filmy/${n}-film.webm`,
+  // Statyczna miniatura wygenerowana ze źródła (ffmpeg, kadr 4:3 jak
+  // w galerii). Pełne wideo pobierane dopiero po otwarciu lightboxa.
+  poster: `/images/zdjecia/jedzenie/filmy/thumbs/${n}-film.webp`,
   label: `Film ${n}`,
 }));
 
