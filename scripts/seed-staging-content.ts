@@ -66,10 +66,15 @@ const WRITABLE = ["menu-categories", "menu-items", "events", "resources"] as con
 /**
  * Globals, które ten skrypt może nadpisać.
  *
- * `dish-of-day` świadomie poza listą: wskazuje pozycję menu relacją, więc
- * zapis wymagałby przeniesienia id z produkcji. Zostaje do ustawienia ręcznego.
+ * `dish-of-day` wskazuje pozycję menu relacją. Id z produkcji NIE są
+ * przenoszone — relacja jest rozwiązywana po NAZWIE pozycji na id stagingowe,
+ * i tylko wtedy, gdy nazwa daje się dopasować jednoznacznie.
+ *
+ * `reservation-settings` celowo poza listą: publiczne API zwraca 403, więc
+ * produkcyjnych wartości nie da się odczytać. Osobna flaga --test-settings
+ * wpisuje tam jawnie oznaczone wartości testowe.
  */
-const WRITABLE_GLOBALS = ["site-settings"] as const
+const WRITABLE_GLOBALS = ["site-settings", "dish-of-day", "reservation-settings"] as const
 
 /**
  * Nigdy nie zapisywane. `media` jest tu mimo publicznego odczytu metadanych:
@@ -293,6 +298,39 @@ const identityNormalizer: Normalizer = (d) => d
 /** `day` wraca z bazy jako pełny timestamp, a ze źródła bywa inaczej sformatowany. */
 const normalizeEvent: Normalizer = (d) => ({ ...d, day: dateOnly(d.day) })
 
+/**
+ * Sprowadza `reservation-settings` do pól, które seed naprawdę ustawia.
+ *
+ * Baza zwraca w każdej grupie także pola poza zakresem seeda
+ * (`depositAmount`, `arrivalWindowAfterMinutes`), a kolumny `numeric` wracają
+ * czasem jako tekst. Bez tego porównanie zawsze wychodziłoby różne i drugi
+ * przebieg zgłaszałby zmianę, której nie ma.
+ */
+const normalizeReservationSettings: Normalizer = (d) => {
+  const out: Record<string, unknown> = {}
+
+  for (const group of ["tables", "billiard", "bowling"] as const) {
+    const actual = (d[group] ?? {}) as Record<string, unknown>
+    const template = TEST_RESERVATION_SETTINGS[group] as Record<string, unknown>
+    const reduced: Record<string, unknown> = {}
+
+    for (const key of Object.keys(template)) {
+      const value = actual[key]
+      if (typeof value === "boolean") {
+        reduced[key] = value
+      } else if (value === null || value === undefined || value === "") {
+        reduced[key] = null
+      } else {
+        const asNumber = Number(value)
+        reduced[key] = Number.isNaN(asNumber) ? value : asNumber
+      }
+    }
+    out[group] = reduced
+  }
+
+  return out
+}
+
 function fail(message: string): never {
   console.error(`\n[seed] PRZERWANO: ${message}`)
   process.exit(1)
@@ -322,6 +360,29 @@ function dateOnly(value: unknown): string | null {
   const d = new Date(value as string)
   if (Number.isNaN(d.getTime())) return null
   return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Czy `reservation-settings` wygląda na nietknięty przez człowieka.
+ *
+ * Porównuje wartości liczbowe i logiczne z domyślnymi ze schematu i wymaga,
+ * by wszystkie komunikaty `disabledMessage` były puste. Każda inna wartość
+ * oznacza czyjąś decyzję i jest chroniona.
+ */
+function holdsSchemaDefaults(current: Record<string, unknown>): boolean {
+  for (const group of ["tables", "billiard", "bowling"] as const) {
+    const actual = current[group] as Record<string, unknown> | undefined
+    const expected = SCHEMA_DEFAULT_RESERVATION_SETTINGS[group] as Record<string, unknown>
+    if (!actual) return false
+
+    const message = actual.disabledMessage
+    if (message !== null && message !== undefined && message !== "") return false
+
+    for (const [key, value] of Object.entries(expected)) {
+      if (Number(actual[key]) !== Number(value) && actual[key] !== value) return false
+    }
+  }
+  return true
 }
 
 /** Czy choć jedno pole ma wartość inną niż puste. */
@@ -398,6 +459,7 @@ function classify(
 
 type Snapshot = {
   siteSettings: Record<string, unknown>
+  dishOfDay: Record<string, unknown>
   categories: any[]
   items: any[]
   events: any[]
@@ -409,8 +471,9 @@ type Snapshot = {
 async function fetchSnapshot(base: string): Promise<Snapshot> {
   log(`Źródło: ${base} (tylko GET)`)
 
-  const [siteSettings, cats, items, events, lanes, billiards] = await Promise.all([
+  const [siteSettings, dishOfDay, cats, items, events, lanes, billiards] = await Promise.all([
     getJson(base, "/api/globals/site-settings"),
+    getJson(base, "/api/globals/dish-of-day"),
     getJson(base, "/api/menu-categories?limit=1000&depth=0&sort=order"),
     getJson(base, "/api/menu-items?limit=1000&depth=0&sort=order"),
     getJson(base, "/api/events?limit=1000&depth=1"),
@@ -434,6 +497,7 @@ async function fetchSnapshot(base: string): Promise<Snapshot> {
 
   return {
     siteSettings: siteSettings as Record<string, unknown>,
+    dishOfDay: dishOfDay as Record<string, unknown>,
     categories: cats.docs ?? [],
     items: items.docs ?? [],
     events: events.docs ?? [],
@@ -484,33 +548,96 @@ const EVENT_FIELDS = [
   "published",
 ]
 
+/**
+ * Wartości TESTOWE dla `reservation-settings`.
+ *
+ * To nie jest odczyt produkcji i nie próbuje jej odzwierciedlić — publiczne API
+ * zwraca tam 403, a zgadywanie cennika byłoby wprowadzaniem w błąd. Liczby
+ * poniżej to wartości `defaultValue` zadeklarowane w
+ * `src/globals/ReservationSettings.ts`, czyli to, co Payload i tak wstawiłby
+ * przy pierwszym zapisie.
+ *
+ * `disabledMessage` nosi prefiks [STAGING], żeby w panelu było widać, że to
+ * środowisko testowe.
+ */
+const TEST_SETTINGS_MARKER = "[STAGING] Wartości testowe — nie pochodzą z produkcji."
+
+/** Wartości domyślne ze schematu, bez komunikatów — do rozpoznania „nietknięte". */
+const SCHEMA_DEFAULT_RESERVATION_SETTINGS: Record<string, Record<string, unknown>> = {
+  tables: {
+    enabled: true,
+    availableTablesCount: 12,
+    arrivalWindowBeforeMinutes: 120,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 120,
+  },
+  billiard: {
+    enabled: true,
+    pricePerHour: 50,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 60,
+  },
+  bowling: {
+    enabled: true,
+    pricePerHour: 120,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 60,
+  },
+}
+
+const TEST_RESERVATION_SETTINGS: Record<string, unknown> = {
+  tables: {
+    enabled: true,
+    disabledMessage: TEST_SETTINGS_MARKER,
+    availableTablesCount: 12,
+    arrivalWindowBeforeMinutes: 120,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 120,
+  },
+  billiard: {
+    enabled: true,
+    disabledMessage: TEST_SETTINGS_MARKER,
+    pricePerHour: 50,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 60,
+  },
+  bowling: {
+    enabled: true,
+    disabledMessage: TEST_SETTINGS_MARKER,
+    pricePerHour: 120,
+    reservationStartAfterOpeningMinutes: 0,
+    latestReservationStartBeforeClosingMinutes: 60,
+  },
+}
+
 // ─── Przebieg ───────────────────────────────────────────────────────────────
 
 type Mode = "dry-run" | "apply" | "validate"
 
-function parseArgs(): { mode: Mode; force: boolean } {
+function parseArgs(): { mode: Mode; force: boolean; testSettings: boolean } {
   const args = process.argv.slice(2)
-  const unknown = args.filter((a) => !["--dry-run", "--apply", "--validate", "--force"].includes(a))
+  const known = ["--dry-run", "--apply", "--validate", "--force", "--test-settings"]
+  const unknown = args.filter((a) => !known.includes(a))
   if (unknown.length > 0) fail(`Nieznane argumenty: ${unknown.join(", ")}`)
 
-  const modes = args.filter((a) => a !== "--force")
+  const modes = args.filter((a) => a !== "--force" && a !== "--test-settings")
   if (modes.length > 1) fail(`Podano więcej niż jeden tryb: ${modes.join(", ")}`)
 
   const mode: Mode = modes[0] === "--apply" ? "apply" : modes[0] === "--validate" ? "validate" : "dry-run"
   const force = args.includes("--force")
   if (force && mode !== "apply") fail("--force ma sens tylko razem z --apply.")
 
-  return { mode, force }
+  return { mode, force, testSettings: args.includes("--test-settings") }
 }
 
 async function main(): Promise<void> {
   assertScopeSane()
 
-  const { mode, force } = parseArgs()
+  const { mode, force, testSettings } = parseArgs()
   const target = parseDatabaseUrl(process.env.DATABASE_URL)
   const base = sourceBase()
 
-  log(`Tryb: ${mode}${force ? " + force" : ""}`)
+  log(`Tryb: ${mode}${force ? " + force" : ""}${testSettings ? " + test-settings" : ""}`)
   log(`Cel: ${target.host}:${target.port}/${target.database}`)
 
   if (mode === "apply" && process.env.SEED_TARGET !== "true") {
@@ -679,18 +806,92 @@ async function main(): Promise<void> {
     )
   }
 
+  // ── dish-of-day ── relacja rozwiązywana po nazwie, nie po id z produkcji
+  {
+    const sourceItem = snap.dishOfDay.item as any
+    const itemName: string | undefined =
+      sourceItem && typeof sourceItem === "object" ? sourceItem.name : undefined
+
+    if (!itemName) {
+      notes.push("dish-of-day: źródło nie wskazuje pozycji menu — pominięte.")
+    } else {
+      // Relacja NIE jest rozwiązywana tutaj. Plan powstaje przed zapisami,
+      // a pozycje menu mogą jeszcze nie istnieć — wtedy dopasowanie dałoby
+      // zero trafień i danie dnia zawsze byłoby pomijane. Id ustala się więc
+      // w fazie zapisu, tak samo jak kategorię pozycji menu.
+      const desired = {
+        itemName,
+        customTitle: snap.dishOfDay.customTitle ?? null,
+        customDescription: snap.dishOfDay.customDescription ?? null,
+        validUntil: snap.dishOfDay.validUntil ?? null,
+      }
+      const current = (await payload.findGlobal({ slug: "dish-of-day", depth: 1 })) as unknown as
+        | Record<string, unknown>
+        | undefined
+
+      // Porównujemy po NAZWIE pozycji, nie po id — id stagingowe i produkcyjne
+      // nie muszą się zgadzać, a mimo to treść jest ta sama.
+      const currentComparable = current
+        ? {
+            itemName: (current.item as any)?.name ?? null,
+            customTitle: current.customTitle ?? null,
+            customDescription: current.customDescription ?? null,
+            validUntil: current.validUntil ?? null,
+          }
+        : undefined
+
+      const existingGlobal =
+        currentComparable && hasAnyValue(currentComparable) ? currentComparable : undefined
+
+      plan.push(
+        classify("dish-of-day", "__global__", desired, existingGlobal, provenance, force, true),
+      )
+    }
+  }
+
+  // ── reservation-settings ── WYŁĄCZNIE wartości testowe, za jawną flagą
+  if (testSettings) {
+    const desired = TEST_RESERVATION_SETTINGS
+    const current = (await payload.findGlobal({
+      slug: "reservation-settings",
+      depth: 0,
+    })) as unknown as Record<string, unknown> | undefined
+
+    // Migracje zakładają ten globals z wartościami domyślnymi ze schematu.
+    // Taki rekord to brak decyzji człowieka, nie dane obcego pochodzenia —
+    // inaczej --test-settings nigdy by nie zadziałało na świeżej bazie.
+    // Rekord zmieniony ręcznie nadal jest chroniony.
+    const existingGlobal = current && !holdsSchemaDefaults(current) ? current : undefined
+
+    plan.push(
+      classify(
+        "reservation-settings",
+        "__global__",
+        desired,
+        existingGlobal,
+        provenance,
+        force,
+        true,
+        normalizeReservationSettings,
+      ),
+    )
+    notes.push(
+      "reservation-settings: wpisane WARTOŚCI TESTOWE (--test-settings). To domyślne " +
+        "wartości ze schematu kolekcji, NIE odczyt produkcji — publiczne API zwraca tam 403. " +
+        "Pola disabledMessage są oznaczone prefiksem [STAGING].",
+    )
+  } else {
+    notes.push(
+      "reservation-settings: publiczne API zwraca 403, więc produkcyjnych wartości nie da się " +
+        "odczytać. Uruchom z --test-settings, żeby wpisać oznaczone wartości testowe, " +
+        "albo wpisz je ręcznie w panelu.",
+    )
+  }
+
   // ── raport treści nieodtwarzalnych ──
-  notes.push(
-    "reservation-settings: globals ma read: isStaffOrAdmin, publiczne API zwraca 403. " +
-      "Cennik kręgli/bilarda, limity i flagi trzeba wpisać ręcznie w panelu stagingu.",
-  )
   notes.push(
     "media: bajty plików nie są replikowane (kolekcja na liście FORBIDDEN). " +
       "Regulamin i polityka prywatności w PDF wymagają ręcznego uploadu na stagingu.",
-  )
-  notes.push(
-    "dish-of-day: wskazuje pozycję menu relacją; zostaje do ustawienia ręcznego, " +
-      "żeby nie zapisywać id z produkcji.",
   )
   if (snap.mediaMissing.length > 0) {
     notes.push(
@@ -766,6 +967,29 @@ async function main(): Promise<void> {
     }
 
     assertWritable(item.collection, Boolean(item.isGlobal))
+
+    // Danie dnia: nazwa pozycji menu na id stagingowe, jednoznacznie albo wcale.
+    if (item.collection === "dish-of-day") {
+      const itemName = String(data.itemName ?? "")
+      delete data.itemName
+
+      const matches = await payload.find({
+        collection: "menu-items",
+        where: { name: { equals: itemName } },
+        limit: 2,
+        depth: 0,
+      })
+
+      if (matches.totalDocs !== 1) {
+        console.log(
+          `[seed] dish-of-day POMINIĘTE: pozycja "${itemName}" ma ${matches.totalDocs} dopasowań ` +
+            `w stagingu — relacji nie da się ustawić jednoznacznie.`,
+        )
+        continue
+      }
+      data.item = (matches.docs[0] as any).id
+      log(`dish-of-day: ustawione na "${itemName}".`)
+    }
 
     if (item.isGlobal) {
       await payload.updateGlobal({ slug: item.collection as any, data: data as any, depth: 0 })
