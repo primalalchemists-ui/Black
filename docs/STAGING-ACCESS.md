@@ -206,6 +206,21 @@ Wszystkie trzy zmienne są wymagane — bez `PAYLOAD_SECRET` Payload nie wstanie
 `SEED_SOURCE_URL` domyślnie wskazuje `https://www.kregielnia-wielun.pl` i musi
 być adresem HTTPS.
 
+### Flagi treści
+
+`--test-settings` dopisuje do planu `reservation-settings` z **wartościami
+testowymi**: to wartości `defaultValue` ze schematu kolekcji, nie odczyt
+produkcji (publiczne API zwraca tam 403). Każde `disabledMessage` dostaje
+prefiks `[STAGING]`, żeby w panelu było widać, że to nie produkcja.
+
+Globals `reservation-settings` jest nadpisywany tylko wtedy, gdy nadal zawiera
+niezmienione wartości domyślne ze schematu. Rekord zmieniony ręcznie zostaje
+pominięty i zgłoszony, jak każdy inny dokument obcego pochodzenia.
+
+`dish-of-day` jest replikowany: relacja do pozycji menu jest rozwiązywana po
+**nazwie** na id stagingowe, w fazie zapisu (po utworzeniu pozycji) i tylko
+gdy nazwa dopasowuje się dokładnie raz.
+
 ### Do ręcznego uzupełnienia na stagingu
 
 1. **`reservation-settings`** — cennik kręgli i bilarda, limity miejsc, okna
@@ -224,3 +239,83 @@ być adresem HTTPS.
 + `startHour`/`startMinute` przez `setHours`, czyli **w strefie czasowej
 serwera**. Seed ich nie przenosi i nie porównuje — zapisuje składniki i pozwala
 hookowi policzyć wynik w środowisku docelowym.
+
+---
+
+## 3. Poczta na stagingu
+
+### Polityka adresatów
+
+Przekierowanie na adres testowy jest wymuszane w **transporcie**
+(`src/lib/mail.ts` → `src/lib/mailPolicy.ts`), nie u wywołujących. Powód jest
+konkretny: konwencja `effectiveTo()` już raz zawiodła —
+`/api/inquiries/occasional` wysyłał na `to: v.email`, czyli adres wpisany
+w formularzu, bez przekierowania. Na stagingu oznaczałoby to prawdziwą
+wiadomość do losowej osoby.
+
+| `EMAIL_MODE` | Dostawa | Polityka |
+| --- | --- | --- |
+| nieustawione / inne | tak, na adresy rzeczywiste | przelotka — produkcja bez zmian |
+| `test` | tak, **wyłącznie** na `RESERVATION_TEST_EMAIL` | `to` nadpisywane, `cc`/`bcc` odrzucane |
+| `mock` | nie, tylko log | przelotka (nic nie opuszcza procesu) |
+
+W trybie `test`:
+
+1. brak `RESERVATION_TEST_EMAIL` → wysyłka **wstrzymana** (wcześniej następował
+   odwrót do adresu klienta — to był błąd typu fail-open);
+2. `to` jest nadpisywane adresem testowym, **także dla wiadomości do
+   właściciela** (`MAIL_TO_OWNER`);
+3. `cc` i `bcc` są **odrzucane**, nie wyciszane — żaden punkt wysyłki ich nie
+   używa, więc ich pojawienie się to błąd programisty;
+4. po nadpisaniu zbiór odbiorców jest weryfikowany ponownie, niezależnie od
+   punktu 2;
+5. temat i treść pozostają nietknięte; pierwotny adresat jedzie w nagłówku
+   `X-Staging-Original-To`, widocznym w źródle wiadomości.
+
+Punkty wysyłki (10 w 5 plikach) mają wysyłkę w best-effort `try/catch`, więc
+zatrzymanie wysyłki nie przerywa rezerwacji. Wyjątkiem jest
+`/api/inquiries/occasional`, gdzie błąd wysyłki propaguje się jak dotąd —
+tego zachowania świadomie nie zmieniano.
+
+Pokrycie: `tests/unit/mailPolicy.spec.ts` (31 testów), w tym odtworzenie
+scenariusza z `occasional` oraz `tests/int/reservationMail.int.spec.ts`
+(mail po `paid`).
+
+### Adres nadawcy
+
+`MAIL_FROM_EMAIL` to `rezerwacje@kregielnia-wielun.pl` — domena zweryfikowana
+w Resendzie dla produkcji. Dlatego staging powinien używać **osobnego klucza API
+w tym samym koncie Resend**: domena jest już zweryfikowana, a klucz da się
+unieważnić niezależnie. Osobne konto Resend wymagałoby ponownej weryfikacji
+domeny albo nadawcy `onboarding@resend.dev`, który dostarcza wiadomości
+wyłącznie na adres właściciela konta.
+
+### Mail po opłaceniu
+
+Mail potwierdzający wychodzi dopiero przy `paymentStatus = paid`, a
+`P24_ENV=mock` nigdy nie potwierdza płatności. Do testu służy wywołanie
+serwerowe `confirmGroupPayment(sessionId, { skipP24Verify: true })` — opcja
+istniejąca w kodzie. **Nie wolno** tworzyć publicznego endpointu obchodzącego
+weryfikację P24.
+
+---
+
+## 4. Testy akceptacyjne
+
+`tests/e2e/staging-acceptance.e2e.spec.ts` uderza po prawdziwym HTTP, więc
+przechodzi przez middleware, bramkę i trasy razem.
+
+```bash
+STAGING_ACCESS_KEY='<klucz>' pnpm exec playwright test          # lokalny serwer
+E2E_BASE_URL='https://<staging>' STAGING_ACCESS_KEY='<klucz>' pnpm exec playwright test
+```
+
+Przy `E2E_BASE_URL` Playwright **nie** podnosi lokalnego serwera — inaczej
+czytałby lokalny `.env` i celował w inną bazę.
+
+Uwaga do uruchamiania: `endHour` w żądaniu rezerwacji to **ostatnia zajęta
+godzina** (inclusive), więc 23:00–00:00 to `startHour: 23, endHour: 23`.
+
+Testy integracyjne północy zakładają **czystą** tabelę `reservations`
+w bazie testowej — nie czyszczą jej same. Przed uruchomieniem:
+`TRUNCATE reservations, blackouts, payments RESTART IDENTITY CASCADE;`
