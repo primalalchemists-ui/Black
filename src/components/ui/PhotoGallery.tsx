@@ -6,18 +6,29 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import { useImageLoaded } from "@/lib/useImageLoaded"
-import { useRevealOnce } from "@/lib/useRevealOnce"
 
 type Photo = { src: string; alt: string }
+
+/**
+ * Ile pierwszych miniatur pobieramy z wyprzedzeniem.
+ *
+ * Siatka mobilna pokazuje 4 kafelki, karuzela na desktopie 5 (`basis-1/5`).
+ * Szóstka pokrywa oba widoki z zapasem. Pozostałe 21 zdjęć zostaje na `lazy`,
+ * żeby nie ściągać całej galerii przy wejściu na stronę.
+ */
+const PRIORITY_COUNT = 6
 
 function GalleryImage({
   src,
   alt,
   className,
+  priority = false,
 }: {
   src: string
   alt: string
   className?: string
+  /** Pobieranie od razu, bez czekania na zbliżenie do widoku. */
+  priority?: boolean
 }) {
   const reduceMotion = useReducedMotion()
   const { loaded, animateIn, onLoaded } = useImageLoaded(src)
@@ -50,45 +61,23 @@ function GalleryImage({
           transition: reduceMotion || !animateIn ? undefined : "opacity 0.35s ease-out",
         }}
         /*
-         * Galeria leży pod pierwszym ekranem, a ma 27 zdjęć. Przy `eager`
-         * wszystkie startowały naraz i dochodziły długo po pierwszym
-         * renderze — pomiar na stagingu przypisał temu momentowi całe CLS
-         * (0.0535 o 4383 ms) oraz przeliczenie karuzeli, które resetowało
-         * animację hero. `lazy` ogranicza to do zdjęć faktycznie widocznych.
+         * Pierwsze miniatury pobieramy od razu, żeby były gotowe (i najczęściej
+         * zdekodowane), zanim sekcja wjedzie w widok — wtedy nie ma ani
+         * szkieletu, ani zaniku przy wejściu. Reszta z 27 zdjęć zostaje na
+         * `lazy`: przy `eager` dla wszystkich dochodziły długo po pierwszym
+         * renderze i obciążały start strony.
+         *
+         * `fetchPriority="low"` sprawia, że te pobrania nie konkurują
+         * z obrazem hero, który jest elementem LCP.
          */
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "low" : undefined}
         decoding="async"
         onLoad={onLoaded}
         onError={onLoaded}
       />
     </div>
   )
-}
-
-/**
- * Styl stopniowanego wejscia miniatury.
- *
- * Charakter zapozyczony z miniatur wideo w restauracji: lekkie podniesienie
- * z dolu plus rozjasnienie, z opoznieniem rosnacym wraz z pozycja — stad
- * wrazenie odslaniania od lewej do prawej.
- *
- * Opoznienie jest ograniczone do pierwszych kilku kafelkow (STAGGER_CAP).
- * Bez tego ostatnia z 27 miniatur czekalaby prawie dwie sekundy.
- *
- * Miejsce kafelka jest zarezerwowane proporcja (`aspect-[4/3]`) na elemencie
- * nadrzednym, wiec animacja nie rusza ukladu — przesuwamy tylko transform.
- */
-const STAGGER_STEP = 0.07
-const STAGGER_CAP = 6
-
-function revealStyle(index: number, revealed: boolean): React.CSSProperties {
-  const delay = Math.min(index, STAGGER_CAP) * STAGGER_STEP
-  return {
-    opacity: revealed ? 1 : 0,
-    transform: revealed ? "none" : "translateY(14px)",
-    transition: `opacity 0.45s ease-out ${delay}s, transform 0.45s ease-out ${delay}s`,
-    willChange: revealed ? undefined : "opacity, transform",
-  }
 }
 
 function LightboxImage({ src, alt, closing }: { src: string; alt: string; closing: boolean }) {
@@ -331,11 +320,9 @@ export default function PhotoGallery({
   titleId?: string
 }) {
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null)
-  const { ref: sectionRef, revealed } = useRevealOnce<HTMLElement>()
-
   return (
     <>
-      <section ref={sectionRef} aria-labelledby={titleId} className="grid w-full gap-4">
+      <section aria-labelledby={titleId} className="grid w-full gap-4">
         <div className="flex items-center justify-between px-4 md:px-0">
           <h2 id={titleId} className="text-2xl font-semibold">
             {title}
@@ -352,13 +339,13 @@ export default function PhotoGallery({
               type="button"
               key={i}
               className="aspect-[4/3] overflow-hidden rounded-xl bg-muted"
-              style={revealStyle(i, revealed)}
               onClick={() => setLightboxIdx(i)}
               aria-label={`Otwórz: ${photo.alt}`}
             >
               <GalleryImage
                 src={photo.src}
                 alt={photo.alt}
+                priority={i < PRIORITY_COUNT}
                 className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
               />
             </button>
@@ -374,13 +361,13 @@ export default function PhotoGallery({
                   <button
                     type="button"
                     className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted"
-                    style={revealStyle(i, revealed)}
                     onClick={() => setLightboxIdx(i)}
                     aria-label={`Otwórz: ${photo.alt}`}
                   >
                     <GalleryImage
                       src={photo.src}
                       alt={photo.alt}
+                      priority={i < PRIORITY_COUNT}
                       className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
                     />
                   </button>

@@ -8,6 +8,18 @@ type OfferItem = {
   desc: string
   href: string
   video: string
+  /**
+   * Statyczna pierwsza klatka.
+   *
+   * Element `<video>` z `preload="metadata"` i BEZ `poster` nie rysuje nic,
+   * dopóki film nie zacznie się odtwarzać — do tego czasu widać czarne tło
+   * karty. Dlatego kafelki „pojawiały się później", mimo że sekcja Oferta
+   * nie ma żadnej animacji wejścia (i nigdy nie miała).
+   *
+   * Poster jest zwykłym obrazem, więc przeglądarka maluje go od razu, a film
+   * nadal startuje dopiero przy hoverze lub w widoku na urządzeniu dotykowym.
+   */
+  poster: string
 }
 
 const OFFER: OfferItem[] = [
@@ -16,24 +28,28 @@ const OFFER: OfferItem[] = [
     desc: "Poznaj ofertę naszych dań.",
     href: "/restauracja",
     video: "/images/oferta/restauracja.webm",
+    poster: "/images/oferta/thumbs/restauracja.webp",
   },
   {
     title: "Rozrywka",
     desc: "Kręgle, bilard i kącik kibica.",
     href: "/rozrywka",
     video: "/images/oferta/rozrywka.webm",
+    poster: "/images/oferta/thumbs/rozrywka.webp",
   },
   {
     title: "Imprezy",
     desc: "Urodziny, komunie, stypy, chrzciny.",
     href: "/imprezy",
     video: "/images/oferta/impreza.webm",
+    poster: "/images/oferta/thumbs/impreza.webp",
   },
   {
     title: "Biznes",
     desc: "Konferencje i szkolenia.",
     href: "/biznes",
     video: "/images/oferta/biznes.webm",
+    poster: "/images/oferta/thumbs/biznes.webp",
   },
 ]
 
@@ -82,9 +98,12 @@ function OfferCard({ item }: { item: OfferItem }) {
       <video
         ref={videoRef}
         src={item.video}
+        poster={item.poster}
         loop
         muted
         playsInline
+        /* `metadata` pobiera tylko nagłówki — pełny plik idzie dopiero przy
+           odtwarzaniu. Poster pokrywa kadr natychmiast. */
         preload="metadata"
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />

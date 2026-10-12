@@ -2,9 +2,6 @@
 
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-
-import { useDelayedFlag } from "@/lib/useDelayedFlag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -329,7 +326,21 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
   const { ref: partySizeRef, name: partySizeName, onChange: partySizeChange, onBlur: partySizeBlur } = form.register("partySize", { valueAsNumber: true });
 
   const isGatedLoading = !fetchedOnce || loadingEvents;
-  const showLoadingOverlay = useDelayedFlag(isGatedLoading);
+
+  /*
+   * Pierwsze odsłonięcie jest NATYCHMIASTOWE, bez przejścia.
+   *
+   * Pomiar pierwszej wizyty na stagingu (czysta sesja): obszar wyboru był
+   * pusty ~680 ms, a potem siatka wchodziła zanikiem 310 ms — to właśnie to
+   * użytkownik widział jako mignięcie przy pierwszym wejściu.
+   *
+   * Teraz neutralna nakładka jest w HTML z serwera, więc obszar nigdy nie
+   * jest pusty, a gdy dane dojdą, treść pojawia się od razu. Przejście
+   * zostaje dla PÓŹNIEJSZYCH zmian, np. zmiany daty.
+   */
+  const hadRevealRef = useRef(false);
+  const revealWithTransition = hadRevealRef.current;
+  if (!isGatedLoading) hadRevealRef.current = true;
 
   return (
     <div className="grid gap-6">
@@ -341,6 +352,12 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
             <CardTitle>Wydarzenie</CardTitle>
           </CardHeader>
 
+          {/*
+            Wysokość karty MUSI być taka sama jak w /rezerwacje/biznes
+            i /rezerwacje/imprezy — użytkownik porównuje te strony obok
+            siebie. Oba puste stany mają identyczny znacznik, więc przy
+            równym `min-h` renderują się tak samo.
+          */}
           <CardContent className="relative min-h-[364px]">
             {/*
                 Zanik tresci przejsciem CSS, nie framerem. Framer animuje
@@ -352,7 +369,7 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
             <div
               style={{
                 opacity: isGatedLoading ? 0 : 1,
-                transition: "opacity 0.35s ease-out",
+                transition: revealWithTransition ? "opacity 0.35s ease-out" : undefined,
                 pointerEvents: isGatedLoading ? "none" : "auto",
               }}
               className="grid gap-4 max-w-[520px] mx-auto"
@@ -438,22 +455,22 @@ export default function RezerwacjeBiznesPage({ phone }: { phone?: string }) {
               w ~200 ms, a nakladka zdazala plynnie wejsc do opacity 0.93
               i natychmiast gasnac — placeholder pojawial sie i znikal.
             */}
-            <AnimatePresence>
-              {showLoadingOverlay && (
-                <motion.div
-                  initial={false}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
+            {/*
+              Nakładka jest w HTML z serwera (warunek nie zależy od stanu
+              klienta), więc obszar wyboru nigdy nie jest pusty. Zamiana na
+              gotową treść jest natychmiastowa — bez `exit`, bo przenikanie
+              nad już widoczną treścią czytało się jako kolejne mignięcie.
+            */}
+              {isGatedLoading && (
+                <div
                   className="absolute inset-0 grid place-items-center bg-card/80 backdrop-blur-sm"
                 >
                   <div className="grid place-items-center gap-3">
                     <div className="h-16 w-16 animate-spin rounded-full border-4 border-black/20 border-t-black" />
                     <div className="text-sm text-muted-foreground">Ładowanie wydarzeń…</div>
                   </div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
           </CardContent>
         </Card>
       ) : null}

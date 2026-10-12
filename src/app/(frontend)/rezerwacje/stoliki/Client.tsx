@@ -3,9 +3,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-
-import { useDelayedFlag } from "@/lib/useDelayedFlag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -253,7 +250,21 @@ export default function RezerwacjeStolikiPage() {
 
   // gating: ukrywamy tylko “resztę” (godzina+osoby+podsumowanie+przycisk)
   const isGatedLoading = !fetchedOnce || loadingSlots;
-  const showLoadingOverlay = useDelayedFlag(isGatedLoading);
+
+  /*
+   * Pierwsze odsłonięcie jest NATYCHMIASTOWE, bez przejścia.
+   *
+   * Pomiar pierwszej wizyty na stagingu (czysta sesja): obszar wyboru był
+   * pusty ~680 ms, a potem siatka wchodziła zanikiem 310 ms — to właśnie to
+   * użytkownik widział jako mignięcie przy pierwszym wejściu.
+   *
+   * Teraz neutralna nakładka jest w HTML z serwera, więc obszar nigdy nie
+   * jest pusty, a gdy dane dojdą, treść pojawia się od razu. Przejście
+   * zostaje dla PÓŹNIEJSZYCH zmian, np. zmiany daty.
+   */
+  const hadRevealRef = useRef(false);
+  const revealWithTransition = hadRevealRef.current;
+  if (!isGatedLoading) hadRevealRef.current = true;
   const gatedCanGoStep2 = !isGatedLoading && canGoStep2;
 
   return (
@@ -299,7 +310,7 @@ export default function RezerwacjeStolikiPage() {
               <div
                 style={{
                   opacity: isGatedLoading ? 0 : 1,
-                  transition: "opacity 0.35s ease-out",
+                  transition: revealWithTransition ? "opacity 0.35s ease-out" : undefined,
                   pointerEvents: isGatedLoading ? "none" : "auto",
                 }}
                 className="grid gap-5"
@@ -369,22 +380,22 @@ export default function RezerwacjeStolikiPage() {
                 w ~200 ms, a nakladka zdazala plynnie wejsc do opacity 0.93
                 i natychmiast gasnac — placeholder pojawial sie i znikal.
               */}
-              <AnimatePresence>
-                {showLoadingOverlay && (
-                  <motion.div
-                    initial={false}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
+              {/*
+                Nakładka jest w HTML z serwera (warunek nie zależy od stanu
+                klienta), więc obszar wyboru nigdy nie jest pusty. Zamiana na
+                gotową treść jest natychmiastowa — bez `exit`, bo przenikanie
+                nad już widoczną treścią czytało się jako kolejne mignięcie.
+              */}
+                {isGatedLoading && (
+                  <div
                     className="absolute inset-0 grid place-items-center bg-card/80 backdrop-blur-sm"
                   >
                     <div className="grid place-items-center gap-3">
                       <div className="h-16 w-16 animate-spin rounded-full border-4 border-black/20 border-t-black" />
                       <div className="text-sm text-muted-foreground">Ładowanie dostępności…</div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
           </CardContent>
         </Card>
