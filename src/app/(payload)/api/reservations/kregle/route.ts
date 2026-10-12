@@ -19,6 +19,8 @@ import {
 } from "../_shared";
 
 import { registerTransaction } from "@/lib/p24";
+import { serverAmountToPay } from "@/lib/reservationPricing";
+import { isBookingConflictError, conflictResponseMessage } from "@/lib/bookingConflict";
 
 import { getOpeningHours, getOpenCloseForDay, buildHourlySlotsWithOffset, addMinutes, isDayClosed } from "../_openingHours";
 import { getBlockingEventsForDay, isSlotBlockedByVenueEvent } from "@/lib/openingHours";
@@ -966,7 +968,36 @@ export async function POST(req: Request) {
     );
   }
 
-  const amountToPay = data.totalPrice ?? 0;
+  /*
+   * Kwota WYŁĄCZNIE z danych serwera. Wcześniej było tu
+   * `data.totalPrice ?? 0`, co pozwalało zamówić płatny zasób za darmo:
+   * `totalPrice: 0` dawało `paymentStatus: "not_required"`.
+   * `data.totalPrice` jest teraz ignorowane.
+   */
+  const amountToPay = serverAmountToPay({
+    startsAt,
+    endsAt,
+    resourceCount: resourceIds.length,
+    pricePerHour: Number(s?.pricePerHour ?? 120),
+  });
+
+  /*
+   * Ta ścieżka nie rejestruje transakcji w P24 — zwraca `paymentId: null`.
+   * Samo przeliczenie ceny zamknęłoby lukę darmowej rezerwacji, ale tworzyłoby
+   * rezerwację `pending` bez żadnego sposobu zapłaty: slot zablokowany do
+   * wygaśnięcia, klient bez linku. Dlatego płatne żądanie w tym formacie jest
+   * odrzucane. Frontend wysyła `segments` i tam płatność działa normalnie.
+   */
+  if (amountToPay > 0) {
+    return NextResponse.json(
+      {
+        error: "LEGACY_PAYLOAD_UNSUPPORTED",
+        message:
+          "Ta forma żądania nie obsługuje płatności. Odśwież stronę i złóż rezerwację ponownie.",
+      },
+      { status: 400 },
+    );
+  }
   const dayISO2 = startOfLocalDayISO(startsAt);
 
   const reservationDoc = await payload.create({
@@ -1008,7 +1039,10 @@ export async function POST(req: Request) {
 
   } catch (e: any) {
     const msg: string = e?.message ?? String(e)
-    if (msg.includes("zarezerwowany w tym czasie") || msg.startsWith("Kolizja")) {
+    // Kolizja terminu to 409, nie awaria. Hooki kolekcji rzucają
+    // „Wystąpiła kolizja…", czego poprzedni warunek nie rozpoznawał —
+    // klient dostawał 500. Patrz src/lib/bookingConflict.ts
+    if (isBookingConflictError(e)) {
       return NextResponse.json(
         { error: "NO_AVAILABILITY", message: "Wybrany tor jest już zajęty w tym terminie. Odśwież stronę i wybierz inny czas." },
         { status: 409 }
