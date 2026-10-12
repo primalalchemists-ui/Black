@@ -159,12 +159,18 @@ export const Reservations: CollectionConfig = {
               // Rolowanie takiego wejścia na następny dzień robiło z 18:00–18:00
               // cichą rezerwację 24-godzinną — i rozjeżdżało top-level z
               // segmentami, które (poprawnie) dają interwał zerowy.
-              // Ograniczone do typów zasobowych: tylko tam interwał decyduje
-              // o kolizjach torów/stołów. Dla całego dnia służy pole „Całodniowe”.
-              if (
-                endD.getTime() === startD.getTime() &&
-                (type === "kregle" || type === "bilard")
-              ) {
+              //
+              // Odrzucamy dla WSZYSTKICH typów. Wcześniej warunek obejmował tylko
+              // „kregle" i „bilard", więc dla stolika, imprezy i biznesu zerowa
+              // długość przechodziła po cichu: `endsAt` równe `startsAt` nie
+              // blokuje niczego, bo każde sprawdzenie nakładania się zwraca
+              // wtedy false. Rezerwacja wyglądała na zapisaną, a termin
+              // zostawał wolny. Audyt produkcyjny wskazał to jako jedyną
+              // regresję względem main, gdzie takie wejście stawało się
+              // (błędną, ale widoczną) blokadą 24-godzinną.
+              //
+              // Dla całego dnia służy pole „Całodniowe".
+              if (endD.getTime() === startD.getTime()) {
                 throw new APIError(
                   "Koniec rezerwacji musi być inny niż początek. Dla całego dnia użyj opcji „Całodniowe”.",
                   400,
