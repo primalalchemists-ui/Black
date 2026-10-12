@@ -112,6 +112,21 @@ export function ResourceGrid({
   const [fetchedOnce, setFetchedOnce] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
+  /**
+   * Parametry, dla których mamy dane w `api`.
+   *
+   * Dotąd siatka znikała przy KAŻDYM pobraniu, bo `isGatedLoading` patrzyło
+   * tylko na `loading`. Każde ponowne wywołanie efektu — także dla tej samej
+   * daty — wygaszało gotową siatkę do zera i pokazywało szkielet od nowa.
+   *
+   * Rozróżnienie jest konieczne, bo nie wolno pokazywać starych danych dla
+   * NOWEJ daty: wtedy niedostępne terminy wyglądałyby na wolne. Dlatego gdy
+   * klucz się zmienia, szkielet zostaje. Gdy odświeżamy te same parametry,
+   * trzymamy na ekranie ostatni znany stan.
+   */
+  const dataKey = type && date ? `${type}|${date}|${sessionId ?? ""}` : null;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
 
@@ -119,8 +134,11 @@ export function ResourceGrid({
       if (!type || !date) {
         setApi(null);
         setFetchedOnce(false);
+        setLoadedKey(null);
         return;
       }
+
+      const requestKey = `${type}|${date}|${sessionId ?? ""}`;
 
       setLoading(true);
       setLoadFailed(false);
@@ -134,6 +152,7 @@ export function ResourceGrid({
 
         if (!res.ok || !json || (json as any).ok !== true) {
           setApi(null);
+          setLoadedKey(null);
           setLoadFailed(true);
           return;
         }
@@ -147,11 +166,13 @@ export function ResourceGrid({
           resources: ok.resources ?? [],
           slots: ok.slots ?? [],
         });
+        setLoadedKey(requestKey);
       } catch {
         // Blad sieci — bez tego leciala nieobsluzona rejekcja, a siatka
         // i tak stawala sie widoczna przez `finally`.
         if (alive) {
           setApi(null);
+          setLoadedKey(null);
           setLoadFailed(true);
         }
       } finally {
@@ -298,7 +319,10 @@ export function ResourceGrid({
   // =========================
   // GATING + OVERLAY
   // =========================
-  const isGatedLoading = shouldFetch && (!fetchedOnce || loading);
+  // Dane pasujące do bieżących parametrów wystarczą, żeby trzymać siatkę na
+  // ekranie — także wtedy, gdy w tle leci odświeżenie tych samych parametrów.
+  const hasDataForParams = Boolean(dataKey && loadedKey === dataKey && api);
+  const isGatedLoading = shouldFetch && !hasDataForParams;
   const ready = shouldFetch ? fetchedOnce && !loading : true;
 
   // ✅ powiadamiaj parent o stanie grid

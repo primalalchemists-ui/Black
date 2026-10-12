@@ -5,6 +5,7 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
+import { useImageLoaded } from "@/lib/useImageLoaded"
 
 type Photo = { src: string; alt: string }
 
@@ -18,13 +19,13 @@ function GalleryImage({
   className?: string
 }) {
   const reduceMotion = useReducedMotion()
-  const [loaded, setLoaded] = React.useState(false)
+  const { loaded, animateIn, onLoaded } = useImageLoaded(src)
   const imgRef = React.useRef<HTMLImageElement>(null)
 
+  // Obraz z cache nie wywoła `onLoad`, więc sprawdzamy `complete` po montowaniu.
   React.useEffect(() => {
-    setLoaded(false)
-    if (imgRef.current?.complete) setLoaded(true)
-  }, [src])
+    if (!loaded && imgRef.current?.complete) onLoaded()
+  }, [loaded, onLoaded])
 
   return (
     <div className="relative h-full w-full">
@@ -43,12 +44,20 @@ function GalleryImage({
         src={src}
         alt={alt}
         className={className}
-        loading="eager"
-        initial={{ opacity: 0 }}
+        /*
+         * Galeria leży pod pierwszym ekranem, a ma 27 zdjęć. Przy `eager`
+         * wszystkie startowały naraz i dochodziły długo po pierwszym
+         * renderze — pomiar na stagingu przypisał temu momentowi całe CLS
+         * (0.0535 o 4383 ms) oraz przeliczenie karuzeli, które resetowało
+         * animację hero. `lazy` ogranicza to do zdjęć faktycznie widocznych.
+         */
+        loading="lazy"
+        decoding="async"
+        initial={animateIn ? { opacity: 0 } : false}
         animate={{ opacity: loaded ? 1 : 0 }}
         transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
+        onLoad={onLoaded}
+        onError={onLoaded}
       />
     </div>
   )
@@ -99,6 +108,18 @@ function Lightbox({
   const [idx, setIdx] = React.useState(startIndex)
   const [dragX, setDragX] = React.useState(0)
 
+  /*
+   * Przesuwanie palcem istnieje tylko na urządzeniach dotykowych. Na desktopie
+   * `dragX` jest zawsze 0, a mimo to `animate={{ x: 0 }}` ze sprężyną wciąż
+   * tykało i po zakończeniu renderowało drzewo PONOWNIE — już w trakcie
+   * wygaszania overlayu. Framer nakładał wtedy z powrotem `animate` na
+   * element, który kończył `exit`: pomiar pokazał opacity 0 → 1 → zniknięcie
+   * (+223 / +247 / +266 ms). To było właśnie to dodatkowe mignięcie.
+   *
+   * Sprężynę włączamy więc dopiero po pierwszym dotknięciu.
+   */
+  const [dragEnabled, setDragEnabled] = React.useState(false)
+
   const touchRef = React.useRef<{ x: number; y: number; t: number } | null>(null)
   const lockAxis = React.useRef<"h" | "v" | null>(null)
 
@@ -128,6 +149,7 @@ function Lightbox({
   }, [])
 
   function handleTouchStart(e: React.TouchEvent) {
+    if (!dragEnabled) setDragEnabled(true)
     touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() }
     lockAxis.current = null
   }
@@ -168,7 +190,12 @@ function Lightbox({
       style={{ touchAction: "none" }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{
+        opacity: 0,
+        // Jawny czas wygaszania: bez tego exit korzystał ze wspólnego
+        // `transition`, które w trakcie zamykania mogło zostać nadpisane.
+        transition: reduceMotion ? { duration: 0 } : { duration: 0.2, ease: "easeOut" },
+      }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
       onClick={onClose}
       onTouchStart={handleTouchStart}
@@ -197,7 +224,7 @@ function Lightbox({
       {/* Wrapper z wizualnym przesunięciem podczas dragu */}
       <motion.div
         className="flex items-center justify-center"
-        animate={{ x: dragX }}
+        animate={dragEnabled ? { x: dragX } : undefined}
         transition={
           dragX === 0
             ? { type: "spring", stiffness: 400, damping: 40 }
